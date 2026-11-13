@@ -1,0 +1,39 @@
+[package]
+name = "glide-core"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Glide for Windows: 모든 Windows 앱에서 쓰는 우클릭 마우스 제스처 (M1 프로토타입)"
+publish = false
+
+[lib]
+name = "glide_core"
+path = "src/lib.rs"
+
+[[bin]]
+name = "glide-core"
+path = "src/main.rs"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Security",
+    "Win32_System_Console",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Performance",
+    "Win32_System_Threading",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+lto = true
+codegen-units = 1
+# 훅 콜백(extern "system")에서 패닉이 경계를 넘지 않도록 즉시 종료한다.
+panic = "abort"
