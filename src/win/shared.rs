@@ -6,6 +6,7 @@
 use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, Ordering};
 use std::sync::{Arc, LazyLock, Mutex, RwLock};
 
+use glide_core::history::{Entry, History};
 use glide_core::settings::Settings;
 use windows_sys::Win32::UI::WindowsAndMessaging::WM_APP;
 
@@ -19,6 +20,8 @@ pub static THRESHOLD: AtomicU32 = AtomicU32::new(glide_core::gesture::DEFAULT_TH
 pub static HOLD_MS: AtomicU32 = AtomicU32::new(glide_core::settings::DEFAULT_HOLD_MS);
 /// 이 프로세스가 uiAccess 토큰으로 실행됐는지(관리자 권한 창에서도 동작). 시작할 때 한 번 정한다.
 pub static UI_ACCESS: AtomicBool = AtomicBool::new(false);
+/// 다른 프로그램이 주입한 입력도 제스처로 해석(설정 `allowInjectedInput`)
+pub static ALLOW_INJECTED: AtomicBool = AtomicBool::new(false);
 
 /// 훅 스레드 ID(스레드 메시지 대상)
 pub static HOOK_THREAD: AtomicU32 = AtomicU32::new(0);
@@ -30,6 +33,42 @@ pub static UI_WINDOW: AtomicIsize = AtomicIsize::new(0);
 pub const WM_HOOK_EXCLUSION: u32 = WM_APP + 1;
 /// 훅 스레드로: 예외 판정 캐시 비우기(설정이 바뀜)
 pub const WM_HOOK_CLEAR_EXCLUSIONS: u32 = WM_APP + 2;
+/// 훅 스레드로: 진행 중인 우클릭 추적을 버리고 훅을 다시 설치(wParam = [`ResetReason`])
+pub const WM_HOOK_RESET: u32 = WM_APP + 3;
+
+/// 초기화 이유(로그용).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(usize)]
+pub enum ResetReason {
+    /// 화면 잠금·해제, 원격 연결·해제, 빠른 사용자 전환
+    Session = 1,
+    /// 절전에서 복귀
+    Resume = 2,
+    /// 모니터 연결·해상도 변경
+    Display = 3,
+    /// 제스처 중 입력 데스크톱이 바뀜(UAC 확인 창, Ctrl+Alt+Del)
+    SecureDesktop = 4,
+}
+
+impl ResetReason {
+    pub fn from_wparam(value: usize) -> Self {
+        match value {
+            1 => Self::Session,
+            2 => Self::Resume,
+            3 => Self::Display,
+            _ => Self::SecureDesktop,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Session => "세션 변경(잠금·원격 연결 등)",
+            Self::Resume => "절전 복귀",
+            Self::Display => "디스플레이 변경",
+            Self::SecureDesktop => "보안 데스크톱 전환",
+        }
+    }
+}
 /// UI 창으로: 채널에 새 사건이 있음
 pub const WM_UI_WAKE: u32 = WM_APP + 10;
 /// UI 창으로: 종료 요청(Ctrl+C 등)
@@ -42,6 +81,24 @@ static SETTINGS: LazyLock<RwLock<Arc<Settings>>> =
 
 /// 설정 파일의 마지막 오류(올바르지 않은 값 등). 설정 창이 보여 준다. 정상으로 읽으면 비운다.
 static SETTINGS_ERROR: Mutex<Option<String>> = Mutex::new(None);
+
+/// 최근 우클릭 기록(메모리에만). 워커가 쓰고 파이프 스레드가 읽는다. 훅 스레드는 건드리지 않는다.
+static HISTORY: LazyLock<Mutex<History>> = LazyLock::new(|| Mutex::new(History::default()));
+
+pub fn record(entry: Entry) {
+    match HISTORY.lock() {
+        Ok(mut guard) => guard.push(entry),
+        Err(poisoned) => poisoned.into_inner().push(entry),
+    }
+}
+
+/// 최근 기록을 설정 창용 JSON으로 읽는다.
+pub fn history_value() -> serde_json::Value {
+    match HISTORY.lock() {
+        Ok(guard) => guard.to_value(),
+        Err(poisoned) => poisoned.into_inner().to_value(),
+    }
+}
 
 pub fn settings_error() -> Option<String> {
     SETTINGS_ERROR.lock().map_or_else(
@@ -70,6 +127,7 @@ pub fn publish(settings: Settings) {
     SETTINGS_ENABLED.store(settings.enabled, Ordering::SeqCst);
     THRESHOLD.store(settings.threshold, Ordering::SeqCst);
     HOLD_MS.store(settings.hold_ms, Ordering::SeqCst);
+    ALLOW_INJECTED.store(settings.allow_injected_input, Ordering::SeqCst);
     if !settings.auto_pause_fullscreen {
         FULLSCREEN_PAUSED.store(false, Ordering::SeqCst);
     }

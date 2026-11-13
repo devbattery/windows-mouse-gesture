@@ -15,11 +15,14 @@ use std::sync::mpsc::{Sender, SyncSender};
 use std::time::{Duration, Instant};
 
 use glide_core::gesture::scale_threshold;
-use glide_core::machine::{Command, Input, Machine, Output, Verdict};
-use glide_core::stats::LatencyHistogram;
+use glide_core::machine::{Command, Ending, Input, Machine, Output, Verdict};
+use glide_core::stats::{LatencyHistogram, PressHistogram};
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows_sys::Win32::Graphics::Gdi::{MONITOR_DEFAULTTONEAREST, MonitorFromPoint};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows_sys::Win32::System::StationsAndDesktops::{
+    CloseDesktop, DESKTOP_READOBJECTS, OpenInputDesktop,
+};
 use windows_sys::Win32::System::Threading::{
     GetCurrentProcessId, GetCurrentThread, GetCurrentThreadId, SetThreadPriority,
     THREAD_PRIORITY_HIGHEST,
@@ -37,7 +40,11 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 
 use super::clock;
 use super::input::MARK;
-use super::shared::{self, HOLD_MS, THRESHOLD, WM_HOOK_CLEAR_EXCLUSIONS, WM_HOOK_EXCLUSION};
+use super::log;
+use super::shared::{
+    self, ALLOW_INJECTED, HOLD_MS, ResetReason, THRESHOLD, WM_HOOK_CLEAR_EXCLUSIONS,
+    WM_HOOK_EXCLUSION, WM_HOOK_RESET,
+};
 use super::ui::{self, UiEvent};
 use super::worker::{Event, Injection};
 
@@ -46,6 +53,8 @@ const PEN_TOUCH_MASK: usize = 0xFFFF_FF00;
 const PEN_TOUCH_SIGNATURE: usize = 0xFF51_5700;
 /// 제스처 중 Esc 확인 주기(ms)
 const ESC_POLL_MS: u32 = 16;
+/// 제스처 중 입력 데스크톱 전환 확인 간격(Esc 확인 횟수 단위, 약 256ms)
+const DESKTOP_CHECK_TICKS: u32 = 16;
 /// 훅이 조용히 제거됐을 가능성에 대비한 주기적 재설치 간격(ms)
 const REINSTALL_MS: u32 = 60_000;
 /// 예외 판정 캐시 최대 크기. 넘으면 비운다.
@@ -59,6 +68,12 @@ pub static HOOK_LATENCY: LatencyHistogram = LatencyHistogram::new();
 pub static DROPPED_EVENTS: AtomicU64 = AtomicU64::new(0);
 /// 훅 재설치 횟수
 pub static REINSTALLS: AtomicU64 = AtomicU64::new(0);
+/// 화면 잠금·보안 데스크톱 등으로 우클릭 추적을 초기화한 횟수
+pub static RESETS: AtomicU64 = AtomicU64::new(0);
+/// 단순 우클릭의 누름 시간(ms). 길게 누르기 기준을 정하는 참고값
+pub static CLICK_PRESS: PressHistogram = PressHistogram::new();
+/// 오른쪽을 누르고 제스처로 확정되기까지 걸린 시간(ms). 길게 누르기 추천값의 근거
+pub static GESTURE_START: PressHistogram = PressHistogram::new();
 
 struct Context {
     machine: Machine,
@@ -70,6 +85,10 @@ struct Context {
     target_pid: u32,
     /// 오른쪽 버튼을 누른 화면 좌표(궤적 시작점)
     origin: (i32, i32),
+    /// 오른쪽 버튼을 누른 시각(`clock::now` 값). 누름 시간 통계에 쓴다
+    pressed_at: i64,
+    /// 제스처 중 Esc 확인 횟수(입력 데스크톱 확인 주기용)
+    esc_ticks: u32,
     /// 프로세스 ID → (예외 앱 여부, 판정 시각). 워커가 판정해 스레드 메시지로 채운다.
     exclusions: HashMap<u32, (bool, Instant)>,
     own_pid: u32,
@@ -120,6 +139,8 @@ pub fn run(events: SyncSender<Event>, ui: SyncSender<UiEvent>, ready: Sender<u32
             target: 0,
             target_pid: 0,
             origin: (0, 0),
+            pressed_at: 0,
+            esc_ticks: 0,
             exclusions: HashMap::new(),
             // SAFETY: 인자 없는 조회 함수다.
             own_pid: unsafe { GetCurrentProcessId() },
@@ -146,6 +167,11 @@ pub fn run(events: SyncSender<Event>, ui: SyncSender<UiEvent>, ready: Sender<u32
                 }
                 WM_HOOK_CLEAR_EXCLUSIONS => {
                     with_context(|context| context.exclusions.clear());
+                    continue;
+                }
+                WM_HOOK_RESET => {
+                    let reason = ResetReason::from_wparam(message.wParam);
+                    with_context(|context| context.reset(reason));
                     continue;
                 }
                 _ => {}
@@ -190,13 +216,19 @@ impl Context {
     /// 마우스 사건 하나를 판정한다. true면 삼킨다.
     fn on_mouse(&mut self, message: u32, info: &MSLLHOOKSTRUCT) -> bool {
         if info.flags & LLMHF_INJECTED != 0 {
-            // 우리가 다시 보낸 누름이 훅을 통과했는지 상태 머신에 알린다.
-            if info.dwExtraInfo == MARK && message == WM_RBUTTONDOWN {
-                let output = self.machine.handle(Input::OwnRightDownSeen);
-                self.apply(output);
+            if info.dwExtraInfo == MARK {
+                // 우리가 다시 보낸 누름이 훅을 통과했는지 상태 머신에 알린다. 우리 입력은 항상 통과시킨다.
+                if message == WM_RBUTTONDOWN {
+                    let output = self.machine.handle(Input::OwnRightDownSeen);
+                    self.apply(output);
+                }
+                return false;
             }
-            // 다른 프로그램이 주입한 입력도 제스처로 해석하지 않는다.
-            return false;
+            // 다른 프로그램이 주입한 입력은 기본적으로 제스처로 해석하지 않는다(자동화 도구 등).
+            // 원격 제어 프로그램(크롬 원격 데스크톱 등)은 입력을 주입하므로, 설정으로 허용하면 일반 입력처럼 다룬다.
+            if !ALLOW_INJECTED.load(Ordering::Relaxed) {
+                return false;
+            }
         }
         if info.dwExtraInfo & PEN_TOUCH_MASK == PEN_TOUCH_SIGNATURE {
             return false;
@@ -207,6 +239,8 @@ impl Context {
         }
         let x = info.pt.x as f64;
         let y = info.pt.y as f64;
+        // 새 누름이 이전 추적을 끝낼 수 있으므로(뗌 유실), 그 기록은 이전 대상 앱으로 남긴다.
+        let previous_pid = self.target_pid;
         let input = match message {
             WM_RBUTTONDOWN => self.right_down(info.pt),
             WM_RBUTTONUP => Input::RightUp { x, y },
@@ -215,7 +249,12 @@ impl Context {
             _ => return false,
         };
         let output = self.machine.handle(input);
-        self.apply(output);
+        let ended_pid = if message == WM_RBUTTONDOWN {
+            previous_pid
+        } else {
+            self.target_pid
+        };
+        self.apply_for(output, ended_pid);
         // 제스처 중 이동은 궤적으로 그린다(시작 알림 뒤에 보내 순서를 지킨다).
         if message == WM_MOUSEMOVE && self.machine.is_gesturing() {
             self.show(
@@ -233,6 +272,7 @@ impl Context {
     fn right_down(&mut self, point: POINT) -> Input {
         let (x, y) = (point.x as f64, point.y as f64);
         let mut allowed = shared::gestures_active() && !modifiers_down();
+        self.pressed_at = clock::now();
         if allowed {
             let (root, pid) = window_at(point);
             self.target = root;
@@ -244,7 +284,16 @@ impl Context {
             } else if pid != 0 {
                 // 판정은 잠깐만 믿는다. PID는 프로세스가 끝나면 다른 프로세스에 다시 쓰이기 때문이다.
                 match self.exclusions.get(&pid) {
-                    Some((excluded, at)) if at.elapsed() < EXCLUSION_TTL => allowed = !excluded,
+                    Some((excluded, at)) if at.elapsed() < EXCLUSION_TTL => {
+                        allowed = !excluded;
+                        if *excluded {
+                            // 예외 앱의 우클릭도 최근 기록에 남겨, 예외가 실제로 적용되는지 볼 수 있게 한다.
+                            self.send(Event::Outcome {
+                                ending: Ending::Excluded,
+                                pid,
+                            });
+                        }
+                    }
                     // 처음 보거나 오래된 판정: 일단 제스처로 시작하고 워커에 판정을 맡긴다(낙관적 시작).
                     _ => self.send(Event::Resolve { pid }),
                 }
@@ -276,8 +325,49 @@ impl Context {
         }
     }
 
+    /// 화면 잠금·보안 데스크톱·절전·디스플레이 변경: 진행 중인 추적을 취소하고 훅을 바로 다시 설치한다.
+    /// 잠금·절전 중에 Windows가 훅을 조용히 제거했을 수 있으므로 주기 재설치(60초)를 기다리지 않는다.
+    fn reset(&mut self, reason: ResetReason) {
+        let output = self.machine.handle(Input::Reset);
+        let busy = output.ending.is_some();
+        self.apply(output);
+        let fresh = install();
+        if !fresh.is_null() {
+            // SAFETY: 이 스레드가 설치한 이전 훅 핸들이다. 새 훅을 먼저 설치했으므로 공백이 없다.
+            unsafe { UnhookWindowsHookEx(self.hook) };
+            self.hook = fresh;
+            REINSTALLS.fetch_add(1, Ordering::Relaxed);
+        }
+        RESETS.fetch_add(1, Ordering::Relaxed);
+        log::info(|| {
+            format!(
+                "[초기화] {}{} · 훅 다시 설치",
+                reason.label(),
+                if busy {
+                    " · 진행 중인 우클릭 취소"
+                } else {
+                    ""
+                }
+            )
+        });
+    }
+
     /// 상태 머신이 요청한 일을 처리한다. 타이머는 여기서, 나머지는 워커·UI로 넘긴다.
     fn apply(&mut self, output: Output) {
+        self.apply_for(output, self.target_pid);
+    }
+
+    /// `apply`와 같되, 끝난 우클릭의 기록을 `ended_pid` 앱으로 남긴다.
+    fn apply_for(&mut self, output: Output, ended_pid: u32) {
+        if let Some(ending) = output.ending {
+            if ending == Ending::Click {
+                CLICK_PRESS.record(clock::micros_since(self.pressed_at) / 1_000);
+            }
+            self.send(Event::Outcome {
+                ending,
+                pid: ended_pid,
+            });
+        }
         for command in output.commands() {
             match command {
                 Command::StartHoldTimer => {
@@ -289,6 +379,7 @@ impl Context {
                 Command::StopHoldTimer => self.stop_hold_timer(),
                 Command::StartEscPoll => {
                     self.stop_esc_poll();
+                    self.esc_ticks = 0;
                     // 제스처 전에 눌렸던 기록(최하위 비트)을 비워 둔다.
                     escape_pressed();
                     // SAFETY: 창 없는 스레드 타이머를 만든다.
@@ -300,6 +391,7 @@ impl Context {
                 Command::InjectRightDown => self.inject(Injection::Press),
                 Command::InjectRightUp => self.inject(Injection::Release),
                 Command::GestureStarted => {
+                    GESTURE_START.record(clock::micros_since(self.pressed_at) / 1_000);
                     let (x, y) = self.origin;
                     self.show(UiEvent::Begin { x, y }, true);
                 }
@@ -377,14 +469,36 @@ unsafe extern "system" fn hold_proc(_: HWND, _: u32, id: usize, _: u32) {
 
 /// 제스처 중 Esc가 눌렸는지 확인한다. 키보드 훅을 설치하지 않기 위해 상태를 조회하는 방식을 쓴다.
 /// Esc 자체는 앱에도 전달된다.
+/// 같은 타이머에서 약 256ms마다 입력 데스크톱이 바뀌었는지(UAC 확인 창·Ctrl+Alt+Del) 확인한다.
+/// 보안 데스크톱에서는 마우스 입력이 훅에 오지 않아 뗌을 놓치므로, 제스처를 취소해 궤적이 남지 않게 한다.
 unsafe extern "system" fn esc_proc(_: HWND, _: u32, _: usize, _: u32) {
-    if !escape_pressed() {
+    if escape_pressed() {
+        with_context(|context| {
+            let output = context.machine.handle(Input::Cancel);
+            context.apply(output);
+        });
         return;
     }
     with_context(|context| {
-        let output = context.machine.handle(Input::Cancel);
-        context.apply(output);
+        context.esc_ticks = context.esc_ticks.wrapping_add(1);
+        if context.esc_ticks % DESKTOP_CHECK_TICKS == 0 && !input_desktop_available() {
+            context.reset(ResetReason::SecureDesktop);
+        }
     });
+}
+
+/// 지금 입력을 받는 데스크톱을 열 수 있으면 true. 보안 데스크톱(Winlogon: 잠금 화면·UAC·Ctrl+Alt+Del)은
+/// 일반 프로세스가 열 수 없으므로 실패한다.
+fn input_desktop_available() -> bool {
+    // SAFETY: 읽기 권한으로 열어 보고 바로 닫는다.
+    unsafe {
+        let desktop = OpenInputDesktop(0, 0, DESKTOP_READOBJECTS);
+        if desktop.is_null() {
+            return false;
+        }
+        CloseDesktop(desktop);
+        true
+    }
 }
 
 /// 훅을 주기적으로 다시 설치한다. 새 훅을 먼저 설치하고 옛 훅을 제거해 공백을 없앤다.

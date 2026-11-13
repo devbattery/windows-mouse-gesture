@@ -9,6 +9,7 @@
 
 mod clock;
 mod demo;
+mod diagnostics;
 mod hook;
 mod input;
 mod launch;
@@ -194,6 +195,8 @@ pub fn run() -> i32 {
         }
     };
     UI_ACCESS.store(has_ui_access(), Ordering::SeqCst);
+    // 실행 시간 기준점을 고정한다.
+    std::sync::LazyLock::force(&diagnostics::STARTED);
 
     // 훅 좌표를 물리 픽셀로 받고 모니터별 DPI로 임계값·오버레이를 맞추기 위해 Per-Monitor v2로 동작한다.
     // SAFETY: 프로세스 시작 직후 창을 만들기 전에 한 번 호출한다. 실패해도(구버전 Windows) 계속 실행한다.
@@ -350,6 +353,7 @@ fn respond(request: Request, events: &SyncSender<worker::Event>, settings_path: 
                 "settingsPath": settings_path,
             }))
         }
+        Request::GetDiagnostics => ipc::success(diagnostics::collect()),
         Request::GetSettings => ipc::success(json!({
             "settings": shared::settings().to_value(),
             "error": shared::settings_error(),

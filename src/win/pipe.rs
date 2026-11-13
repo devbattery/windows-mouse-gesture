@@ -162,12 +162,17 @@ mod tests {
                     Request::GetStatus => ipc::success(json!({ "version": "test" })),
                     Request::GetSettings => ipc::success(json!({ "settings": {} })),
                     Request::SetSettings(_) => ipc::failure("검증 실패"),
+                    Request::GetDiagnostics => {
+                        ipc::success(json!({ "history": { "entries": [] } }))
+                    }
                 },
             )
         });
         let status = ipc::call(&name, &Request::GetStatus, |_| true).unwrap();
         assert_eq!(status["version"], "test");
         assert!(ipc::call(&name, &Request::GetSettings, |_| true).is_ok());
+        let diagnostics = ipc::call(&name, &Request::GetDiagnostics, |_| true).unwrap();
+        assert!(diagnostics["history"]["entries"].is_array());
         assert_eq!(
             ipc::call(&name, &Request::SetSettings(json!({})), |_| true),
             Err(CallError::Failed("검증 실패".into()))

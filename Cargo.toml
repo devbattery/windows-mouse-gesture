@@ -5,7 +5,7 @@ members = [".", "settings"]
 
 [package]
 name = "glide-core"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 rust-version = "1.85"
 description = "Glide for Windows: 모든 Windows 앱에서 쓰는 우클릭 마우스 제스처"
@@ -40,6 +40,9 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_LibraryLoader",
     "Win32_System_Performance",
     "Win32_System_Pipes",
+    "Win32_System_Registry",
+    "Win32_System_RemoteDesktop",
+    "Win32_System_StationsAndDesktops",
     "Win32_System_Threading",
     "Win32_UI_HiDpi",
     "Win32_UI_Input_KeyboardAndMouse",

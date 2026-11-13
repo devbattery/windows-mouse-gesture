@@ -17,6 +17,19 @@ pub const MAX_HOLD_MS: u64 = 3_000;
 pub const DEFAULT_HOLD_MS: u32 = 400;
 const MAX_EXCLUDED: usize = 256;
 
+/// 예외에 넣기를 권하는 앱(실행 파일 이름, 이유). 기본으로 넣지는 않고 설정 창에서 버튼으로 제안한다.
+/// 원격·가상 머신 화면에서는 제스처가 바깥 창(이 PC)에 실행되므로 원격 쪽 우클릭이 지연되거나
+/// 엉뚱한 창이 닫힐 수 있다. 공식 문서·배포 문서에서 이름을 확인한 것만 둔다.
+pub const SUGGESTED_EXCLUSIONS: [(&str, &str); 4] = [
+    ("mstsc.exe", "원격 데스크톱 연결"),
+    (
+        "msrdc.exe",
+        "원격 데스크톱 클라이언트(Azure Virtual Desktop)",
+    ),
+    ("vmconnect.exe", "Hyper-V 가상 머신 연결"),
+    ("virtualboxvm.exe", "VirtualBox 가상 머신 창"),
+];
+
 /// 설정 파일 위치: `%APPDATA%\Glide\settings.json`(사용자별, 로밍 프로필).
 /// 코어(읽기·쓰기)와 설정 창(코어가 꺼져 있을 때 읽기만)이 같은 규칙을 쓴다.
 pub fn file_path() -> std::path::PathBuf {
@@ -40,6 +53,8 @@ pub struct Settings {
     pub excluded_processes: Vec<String>,
     /// 전체 화면 게임·프레젠테이션 중 자동 일시 중지
     pub auto_pause_fullscreen: bool,
+    /// 다른 프로그램이 주입한 입력(원격 제어 프로그램 등)도 제스처로 해석
+    pub allow_injected_input: bool,
 }
 
 /// 확장의 기본 제스처 10종(`shared.js` defaults.rules)과 같다.
@@ -72,6 +87,7 @@ impl Default for Settings {
             hold_ms: DEFAULT_HOLD_MS,
             excluded_processes: Vec::new(),
             auto_pause_fullscreen: true,
+            allow_injected_input: false,
         }
     }
 }
@@ -226,6 +242,11 @@ pub fn validate(value: &Value) -> Result<Settings, String> {
         Some(Value::Bool(value)) => *value,
         Some(_) => return Err("autoPauseFullscreen은 true 또는 false여야 합니다.".into()),
     };
+    let allow_injected_input = match windows.get("allowInjectedInput") {
+        None | Some(Value::Null) => defaults.allow_injected_input,
+        Some(Value::Bool(value)) => *value,
+        Some(_) => return Err("allowInjectedInput은 true 또는 false여야 합니다.".into()),
+    };
     Ok(Settings {
         enabled,
         threshold: threshold as u32,
@@ -233,6 +254,7 @@ pub fn validate(value: &Value) -> Result<Settings, String> {
         hold_ms,
         excluded_processes,
         auto_pause_fullscreen,
+        allow_injected_input,
     })
 }
 
@@ -249,6 +271,7 @@ impl Settings {
                 "holdToPassMs": self.hold_ms,
                 "excludedProcesses": self.excluded_processes,
                 "autoPauseFullscreen": self.auto_pause_fullscreen,
+                "allowInjectedInput": self.allow_injected_input,
             }
         })
     }
@@ -346,6 +369,20 @@ mod tests {
         assert_eq!(ok.excluded_processes, ["mstsc.exe"]);
         assert!(ok.is_excluded("Mstsc.EXE"));
         assert!(!ok.auto_pause_fullscreen);
+        // 주입 입력 허용은 기본 꺼짐이고, 켜면 저장·읽기에서 유지된다
+        assert!(!ok.allow_injected_input);
+        let injected = parse(&format!(
+            r#"{{{base},"windows":{{"allowInjectedInput":true}}}}"#
+        ))
+        .unwrap();
+        assert!(injected.allow_injected_input);
+        assert_eq!(parse(&injected.to_json()).unwrap(), injected);
+        assert!(
+            parse(&format!(
+                r#"{{{base},"windows":{{"allowInjectedInput":1}}}}"#
+            ))
+            .is_err()
+        );
         assert!(parse(&format!(r#"{{{base},"windows":{{"holdToPassMs":50}}}}"#)).is_err());
         assert!(
             parse(&format!(

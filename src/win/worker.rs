@@ -11,7 +11,9 @@ use std::time::{Duration, Instant};
 
 use glide_core::actions::Effect;
 use glide_core::gesture::Sequence;
+use glide_core::history::{Entry, Kind};
 use glide_core::ipc;
+use glide_core::machine::Ending;
 use glide_core::settings::Settings;
 use windows_sys::Win32::UI::Shell::{
     QUNS_PRESENTATION_MODE, QUNS_RUNNING_D3D_FULL_SCREEN, SHQueryUserNotificationState,
@@ -56,6 +58,11 @@ pub enum Event {
     },
     /// 처음 보는 프로세스가 예외 앱인지 판정해 달라
     Resolve {
+        pid: u32,
+    },
+    /// 우클릭 하나가 제스처 실행 말고 다른 방식으로 끝남(최근 기록용)
+    Outcome {
+        ending: Ending,
         pid: u32,
     },
     /// 설정 창이 보낸(코어가 검증한) 설정을 저장하고 반영해 달라. 결과를 `reply`로 돌려준다.
@@ -139,15 +146,39 @@ fn handle(event: Event, ui: &SyncSender<UiEvent>) {
             invalid,
             target,
             pid,
-        } => execute(sequence, invalid, target, pid, ui),
+        } => {
+            let (kind, detail) = execute(sequence, invalid, target, pid, ui);
+            remember(pid, kind, detail);
+        }
+        Event::Outcome { ending, pid } => remember(pid, ending.into(), None),
         // run에서 처리한다(저장소가 필요하거나 루프를 끝낸다).
         Event::Save { .. } | Event::Shutdown => {}
     }
 }
 
-/// 제스처 하나를 실행한다.
-fn execute(sequence: Sequence, invalid: bool, target: isize, pid: u32, ui: &SyncSender<UiEvent>) {
+/// 최근 기록에 한 건 남긴다. 앱은 실행 파일 이름만 남긴다(알 수 없으면 빈 문자열).
+fn remember(pid: u32, kind: Kind, detail: Option<String>) {
+    let at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_millis() as u64);
+    shared::record(Entry {
+        at,
+        app: process_name(pid).unwrap_or_default(),
+        kind,
+        detail,
+    });
+}
+
+/// 제스처 하나를 실행하고, 최근 기록에 남길 결과(종류, 동작 ID·방향·실패 이유)를 돌려준다.
+fn execute(
+    sequence: Sequence,
+    invalid: bool,
+    target: isize,
+    pid: u32,
+    ui: &SyncSender<UiEvent>,
+) -> (Kind, Option<String>) {
     let app = app_name(target);
+    let directions = (!sequence.is_empty()).then(|| sequence.as_str().to_string());
     if invalid || sequence.is_empty() {
         log::info(|| {
             format!(
@@ -155,7 +186,7 @@ fn execute(sequence: Sequence, invalid: bool, target: isize, pid: u32, ui: &Sync
                 sequence.arrows()
             )
         });
-        return;
+        return (Kind::NotGesture, directions);
     }
     let settings = shared::settings();
     let Some(rule) = settings
@@ -164,12 +195,14 @@ fn execute(sequence: Sequence, invalid: bool, target: isize, pid: u32, ui: &Sync
         .find(|rule| rule.gesture == sequence.as_str())
     else {
         log::info(|| format!("[결과] 등록되지 않은 제스처 {} · {app}", sequence.arrows()));
-        return;
+        return (Kind::Unmatched, directions);
     };
     // 낙관적 시작 뒤 판정이 늦게 끝난 예외 앱: 실행하지 않는다.
+    // 이미 제스처로 삼켜져 앱에 우클릭이 전달되지 않았으므로 "원래 우클릭"(Excluded)이 아니라 실행 못 함으로 남긴다.
     if process_name(pid).is_some_and(|name| is_excluded(&name)) {
-        notify(ui, sequence, "제스처를 쓰지 않는 앱입니다");
-        return;
+        let message = "제스처를 쓰지 않는 앱입니다";
+        notify(ui, sequence, message);
+        return (Kind::Failed, Some(message.into()));
     }
     let effect = rule.effect();
     let window_effect = matches!(
@@ -177,8 +210,9 @@ fn execute(sequence: Sequence, invalid: bool, target: isize, pid: u32, ui: &Sync
         Effect::MinimizeWindow | Effect::ToggleMaximize | Effect::CloseWindow
     );
     if window_effect && is_shell_window(target) {
-        notify(ui, sequence, "바탕 화면·작업 표시줄에는 실행하지 않습니다");
-        return;
+        let message = "바탕 화면·작업 표시줄에는 실행하지 않습니다";
+        notify(ui, sequence, message);
+        return (Kind::Failed, Some(message.into()));
     }
     let result: Result<(), &str> = match &effect {
         Effect::Keys(shortcut) => {
@@ -216,8 +250,14 @@ fn execute(sequence: Sequence, invalid: bool, target: isize, pid: u32, ui: &Sync
         Effect::Unsupported => Err("Windows에서 지원하지 않는 동작입니다"),
     };
     match result {
-        Ok(()) => log::info(|| format!("[결과] {} → {} · {app}", sequence.arrows(), rule.action)),
-        Err(message) => notify(ui, sequence, message),
+        Ok(()) => {
+            log::info(|| format!("[결과] {} → {} · {app}", sequence.arrows(), rule.action));
+            (Kind::Executed, Some(rule.action.clone()))
+        }
+        Err(message) => {
+            notify(ui, sequence, message);
+            (Kind::Failed, Some(message.into()))
+        }
     }
 }
 

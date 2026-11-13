@@ -3,7 +3,7 @@
 //! - 파이프 이름: `\\.\pipe\glide-core-<사용자 SID>` (사용자마다 다르게, 빠른 사용자 전환 대비)
 //! - 메시지: 4바이트 리틀 엔디언 길이 + UTF-8 JSON. 한 건 최대 64KB.
 //! - 연결 한 번에 요청 하나, 응답 하나. 연결을 오래 붙잡지 않는다.
-//! - 명령: `getStatus`, `getSettings`, `setSettings`. 파일 경로를 받는 명령은 두지 않는다
+//! - 명령: `getStatus`, `getSettings`, `setSettings`, `getDiagnostics`. 파일 경로를 받는 명령은 두지 않는다
 //!   (백업 파일 읽기·쓰기는 설정 창이 하고, 코어는 검증된 설정 값만 받는다).
 //! - 코어는 받은 설정을 다시 검증한다. 설정 창의 검증은 사용자 안내용일 뿐이다.
 
@@ -26,6 +26,9 @@ pub enum Request {
     GetSettings,
     /// 설정 저장. 값은 설정 파일 형식이며 코어가 다시 검증한다.
     SetSettings(Value),
+    /// 일상 사용 점검: 최근 우클릭 기록, 누름 시간 통계, 진단 정보(좌표·창 제목 없음).
+    /// 프로토콜 1에 나중에 더한 명령이다. 이전 코어는 "알 수 없는 요청"으로 답한다.
+    GetDiagnostics,
 }
 
 impl Request {
@@ -34,6 +37,7 @@ impl Request {
             Request::GetStatus => ("getStatus", None),
             Request::GetSettings => ("getSettings", None),
             Request::SetSettings(settings) => ("setSettings", Some(settings)),
+            Request::GetDiagnostics => ("getDiagnostics", None),
         };
         let mut value = json!({ "protocolVersion": PROTOCOL_VERSION, "command": command });
         if let Some(settings) = settings {
@@ -51,6 +55,7 @@ impl Request {
         match value.get("command").and_then(Value::as_str) {
             Some("getStatus") => Ok(Request::GetStatus),
             Some("getSettings") => Ok(Request::GetSettings),
+            Some("getDiagnostics") => Ok(Request::GetDiagnostics),
             Some("setSettings") => match value.get("settings") {
                 Some(settings @ Value::Object(_)) => Ok(Request::SetSettings(settings.clone())),
                 _ => Err("저장할 설정이 없습니다.".into()),
@@ -300,6 +305,7 @@ mod tests {
             Request::GetStatus,
             Request::GetSettings,
             Request::SetSettings(json!({ "enabled": true })),
+            Request::GetDiagnostics,
         ] {
             assert_eq!(Request::from_value(&request.to_value()).unwrap(), request);
         }

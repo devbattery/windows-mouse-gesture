@@ -18,19 +18,23 @@ use windows_sys::Win32::System::Com::{
     COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoUninitialize,
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows_sys::Win32::System::RemoteDesktop::{
+    NOTIFY_FOR_THIS_SESSION, WTSRegisterSessionNotification, WTSUnRegisterSessionNotification,
+};
 use windows_sys::Win32::UI::Shell::{NIN_SELECT, NINF_KEY};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu, DestroyWindow,
     DispatchMessageW, GetCursorPos, GetMessageW, KillTimer, MF_CHECKED, MF_GRAYED, MF_SEPARATOR,
-    MF_STRING, MSG, PostMessageW, PostQuitMessage, RegisterClassExW, RegisterWindowMessageW,
-    SetForegroundWindow, SetTimer, TPM_NONOTIFY, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu,
-    WM_CONTEXTMENU, WM_NULL, WM_TIMER, WNDCLASSEXW, WS_OVERLAPPED,
+    MF_STRING, MSG, PBT_APMRESUMEAUTOMATIC, PBT_APMRESUMESUSPEND, PostMessageW, PostQuitMessage,
+    PostThreadMessageW, RegisterClassExW, RegisterWindowMessageW, SetForegroundWindow, SetTimer,
+    TPM_NONOTIFY, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, WM_CONTEXTMENU, WM_DISPLAYCHANGE,
+    WM_NULL, WM_POWERBROADCAST, WM_TIMER, WM_WTSSESSION_CHANGE, WNDCLASSEXW, WS_OVERLAPPED,
 };
 
 use super::overlay::Overlay;
 use super::shared::{
-    self, FULLSCREEN_PAUSED, RUNTIME_ENABLED, SETTINGS_ENABLED, UI_ACCESS, UI_WINDOW, WM_UI_EXIT,
-    WM_UI_TRAY, WM_UI_WAKE,
+    self, FULLSCREEN_PAUSED, HOOK_THREAD, RUNTIME_ENABLED, ResetReason, SETTINGS_ENABLED,
+    UI_ACCESS, UI_WINDOW, WM_HOOK_RESET, WM_UI_EXIT, WM_UI_TRAY, WM_UI_WAKE,
 };
 use super::tray::Tray;
 use super::{hook, launch, log};
@@ -170,6 +174,11 @@ pub fn run(
         let _ = ready.send(0);
         return;
     }
+    // 화면 잠금·해제, 원격 연결·해제 알림(WM_WTSSESSION_CHANGE)을 받는다. 실패해도 계속 실행한다
+    // (제스처 중 보안 데스크톱 전환은 훅 스레드가 따로 확인한다).
+    // SAFETY: 이 스레드가 만든 창을 등록하고, 끝날 때 해제한다.
+    let session_notifications =
+        unsafe { WTSRegisterSessionNotification(window, NOTIFY_FOR_THIS_SESSION) } != 0;
     let overlay = match Overlay::new() {
         Ok(overlay) => Some(overlay),
         Err(error) => {
@@ -214,6 +223,9 @@ pub fn run(
     UI.with(|cell| cell.borrow_mut().take());
     // SAFETY: 이 스레드가 만든 창을 닫고 COM을 해제한다.
     unsafe {
+        if session_notifications {
+            WTSUnRegisterSessionNotification(window);
+        }
         DestroyWindow(window);
         if com {
             CoUninitialize();
@@ -253,6 +265,24 @@ unsafe extern "system" fn control_proc(
             // SAFETY: 이 스레드의 메시지 루프를 끝낸다.
             unsafe { PostQuitMessage(0) };
             0
+        }
+        // 잠금·해제·원격 연결 등: 뗌을 놓쳤을 수 있으므로 추적을 초기화한다.
+        WM_WTSSESSION_CHANGE => {
+            reset_tracking(ResetReason::Session);
+            0
+        }
+        WM_POWERBROADCAST => {
+            if matches!(wparam as u32, PBT_APMRESUMEAUTOMATIC | PBT_APMRESUMESUSPEND) {
+                reset_tracking(ResetReason::Resume);
+            }
+            // 전원 알림에는 TRUE를 돌려준다.
+            1
+        }
+        WM_DISPLAYCHANGE => {
+            // 모니터 배치가 바뀌면 그리던 표면의 좌표가 맞지 않으므로 진행 중인 제스처를 취소한다.
+            reset_tracking(ResetReason::Display);
+            // SAFETY: 기본 처리기로도 넘긴다.
+            unsafe { DefWindowProcW(window, message, wparam, lparam) }
         }
         _ if message != 0 && message == TASKBAR_CREATED.load(Ordering::Relaxed) => {
             // Explorer가 다시 시작됨: 트레이 아이콘을 다시 등록한다.
@@ -356,6 +386,16 @@ impl Ui {
         if let Some(overlay) = &mut self.overlay {
             overlay.hide();
         }
+    }
+}
+
+/// 훅 스레드에 우클릭 추적 초기화를 요청하고 오버레이를 숨긴다(UI 스레드에서 호출).
+fn reset_tracking(reason: ResetReason) {
+    with_ui(Ui::hide_overlay);
+    let thread = HOOK_THREAD.load(Ordering::SeqCst);
+    if thread != 0 {
+        // SAFETY: 훅 스레드 ID로 스레드 메시지를 넣는다.
+        unsafe { PostThreadMessageW(thread, WM_HOOK_RESET, reason as usize, 0) };
     }
 }
 
