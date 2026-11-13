@@ -5,10 +5,12 @@ members = [".", "settings"]
 
 [package]
 name = "glide-core"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2024"
 rust-version = "1.85"
 description = "Glide for Windows: 모든 Windows 앱에서 쓰는 우클릭 마우스 제스처"
+license = "MIT"
+repository = "https://github.com/devbattery/windows-mouse-gesture"
 publish = false
 
 [lib]
@@ -64,6 +66,10 @@ windows = { version = "0.62", features = [
 ] }
 # Direct2D 좌표 타입(Vector2). windows 0.62가 쓰는 버전과 맞춘다.
 windows-numerics = "0.3"
+
+[build-dependencies]
+# 코어 실행 파일에 버전 정보·아이콘 자원을 넣는다(설정 창의 tauri-build가 이미 쓰는 것과 같은 크레이트).
+tauri-winres = "0.3"
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }

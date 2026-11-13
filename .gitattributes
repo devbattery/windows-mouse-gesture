@@ -1,0 +1,3 @@
+# 배치·PowerShell 스크립트는 Windows 줄바꿈으로 고정한다(체크아웃 설정과 무관하게 릴리스 zip이 같게 만들어지도록).
+*.cmd text eol=crlf
+*.ps1 text eol=crlf

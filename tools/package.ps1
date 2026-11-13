@@ -5,9 +5,10 @@
 .DESCRIPTION
   1. 일반 빌드: glide-core.exe(관리자 창 미지원판), glide-settings.exe
   2. uiAccess 빌드: glide-core-uiaccess.exe(관리자 창 지원판, 설치 때 서명)
-  3. 설치·제거 스크립트를 함께 복사하고, uiAccess 매니페스트가 실제로 들어갔는지 mt.exe로 확인한다.
+  3. 설치·제거 스크립트와 LICENSE를 함께 복사하고, uiAccess 매니페스트가 실제로 들어갔는지 mt.exe로 확인한다.
 
-  이 스크립트는 빌드와 파일 복사만 한다. 인증서·서명·Program Files 설치는 installer\install.ps1이 한다.
+  이 스크립트는 빌드와 파일 복사만 한다. 인증서·서명·Program Files 설치는 installer\install.ps1이,
+  배포용 zip과 SHA256SUMS.txt는 tools\archive.ps1이 만든다(그 사이에 CI가 코드 서명을 넣을 수 있다).
 
 .EXAMPLE
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\package.ps1
@@ -29,9 +30,21 @@ function Invoke-Cargo([string[]] $Arguments) {
     if ($LASTEXITCODE -ne 0) { throw "cargo $($Arguments -join ' ') 실패(종료 코드 $LASTEXITCODE)" }
 }
 
-Invoke-Cargo @('build', '--release', '--workspace')
+# 빌드 도구 확인. 없으면 설치 방법만 알려 주고 멈춘다(이 스크립트는 아무것도 설치하지 않는다).
+if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+    Write-Host @'
+Rust(cargo)를 찾지 못했습니다. 소스에서 빌드하려면 다음을 설치한 뒤 새 터미널에서 다시 실행해 주세요.
+  winget install --id Rustlang.Rustup
+  winget install --id Microsoft.VisualStudio.2022.BuildTools --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+빌드 없이 설치만 하려면 GitHub Releases의 glide-windows-<버전>.zip을 받아 install.cmd를 실행하면 됩니다.
+'@
+    exit 1
+}
+
+# --locked: Cargo.lock에 기록된 의존성 버전 그대로 빌드한다(누가 빌드해도 같은 의존성).
+Invoke-Cargo @('build', '--release', '--locked', '--workspace')
 # 같은 target 폴더에서 기능만 바꿔 빌드하면 일반판을 덮어쓰므로 폴더를 나눈다.
-Invoke-Cargo @('build', '--release', '-p', 'glide-core', '--features', 'uiaccess', '--target-dir', 'target\uiaccess')
+Invoke-Cargo @('build', '--release', '--locked', '-p', 'glide-core', '--features', 'uiaccess', '--target-dir', 'target\uiaccess')
 
 $output = Join-Path $root "dist\glide-windows-$version"
 if (Test-Path $output) { Remove-Item -Recurse -Force $output }
@@ -40,7 +53,9 @@ Copy-Item (Join-Path $root 'target\release\glide-core.exe') $bin
 Copy-Item (Join-Path $root 'target\release\glide-settings.exe') $bin
 Copy-Item (Join-Path $root 'target\uiaccess\release\glide-core.exe') (Join-Path $bin 'glide-core-uiaccess.exe')
 Copy-Item (Join-Path $root 'installer\*') $output
-# 실행 파일에는 버전 자원이 없으므로 설치 스크립트가 install.json에 기록할 버전을 따로 둔다.
+# MIT 라이선스는 배포물에 저작권·허가 문구를 함께 넣어야 한다.
+Copy-Item (Join-Path $root 'LICENSE') (Join-Path $output 'LICENSE.txt')
+# 설치 스크립트가 install.json·"앱 및 기능"에 기록할 버전(PowerShell에서 실행 파일 자원을 읽지 않고 쓰도록)
 Set-Content -LiteralPath (Join-Path $output 'version.txt') -Value $version -Encoding ASCII
 
 # uiAccess판에만 uiAccess="true"가 들어갔는지 확인한다(Windows SDK의 mt.exe).
@@ -57,6 +72,9 @@ if ($mt) {
         if ($hasUiAccess -ne $expected) { throw "$name 매니페스트가 예상과 다릅니다(uiAccess=$hasUiAccess)." }
         Write-Host "확인: $name uiAccess=$hasUiAccess"
     }
+} elseif ($env:GITHUB_ACTIONS -eq 'true') {
+    # 릴리스 빌드에서는 확인을 건너뛰지 않는다.
+    throw 'mt.exe를 찾지 못했습니다(Windows SDK 필요).'
 } else {
     Write-Warning 'mt.exe를 찾지 못해 매니페스트 확인을 건너뜁니다(Windows SDK 필요).'
 }

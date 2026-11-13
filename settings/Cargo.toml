@@ -1,9 +1,11 @@
 [package]
 name = "glide-settings"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2024"
 rust-version = "1.85"
 description = "Glide for Windows 설정 창"
+license = "MIT"
+repository = "https://github.com/devbattery/windows-mouse-gesture"
 publish = false
 
 [[bin]]
