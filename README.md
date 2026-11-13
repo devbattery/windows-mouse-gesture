@@ -2,10 +2,10 @@
 
 크롬 확장 **Glide**의 우클릭 마우스 제스처를 모든 Windows 10/11 앱에서 쓰기 위한 상주 프로그램입니다.
 
-> **현재 단계: M4 일상 사용 검증.** 트레이에 상주하는 코어(`glide-core.exe`)와
-> 설정 창(`glide-settings.exe`, Tauri)으로 이루어집니다. 설치 스크립트로 설치하면 관리자 권한 창(작업 관리자 등)
-> 위에서도 제스처가 동작합니다(uiAccess, 이 PC 전용 자체 서명). 설정 창의 **일상 사용 점검**으로 문제 앱과
-> 길게 누르기 기준을 찾습니다. 남은 확인 항목은 [최종 시험 순서](#최종-시험-순서)에 모았습니다.
+> **현재 단계: M5 공개 배포.** 트레이에 상주하는 코어(`glide-core.exe`)와 설정 창(`glide-settings.exe`, Tauri)으로
+> 이루어집니다. [Releases](https://github.com/devbattery/windows-mouse-gesture/releases)의 zip을 받아 설치하면
+> 관리자 권한 창(작업 관리자 등) 위에서도 제스처가 동작합니다. 실제 마우스로 할 확인 항목은
+> [최종 시험 순서](#최종-시험-순서)에 모았습니다. 변경 내용은 [CHANGELOG](CHANGELOG.md)에 있습니다.
 
 ## 동작 방식
 
@@ -24,20 +24,34 @@
 > **크롬 확장 Glide는 꺼 주세요.** 이 프로그램이 브라우저에서도 제스처를 처리합니다(우클릭을 먼저 가로채므로
 > 확장은 동작하지 않습니다). 브라우저를 제외하고 확장을 쓰려면 예외 앱에 `chrome.exe` 등을 넣으세요.
 
-## 설치 (본인 PC용)
+## 설치
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\package.ps1   # dist\glide-windows-<버전>\ 생성
-dist\glide-windows-<버전>\install.cmd                                     # UAC 확인 1회
-```
+요구 사항: Windows 10 22H2 또는 Windows 11(x64). 설정 창에 WebView2 런타임이 필요합니다(Windows 11과 최신 Windows 10에는 기본 포함).
+
+1. [Releases](https://github.com/devbattery/windows-mouse-gesture/releases)에서 `glide-windows-<버전>.zip`을 받습니다.
+   같은 곳의 `SHA256SUMS.txt`와 비교하려면 PowerShell에서 `(Get-FileHash glide-windows-<버전>.zip).Hash.ToLower()`를 실행합니다
+   (`Get-FileHash`는 대문자로 출력하고 `SHA256SUMS.txt`는 소문자입니다).
+2. zip을 **압축 해제**합니다. zip 안에서 바로 실행하면 파일이 없어서 설치가 멈춥니다.
+3. 압축을 푼 폴더의 `install.cmd`를 실행합니다. UAC 확인 창이 한 번 뜹니다.
+
+**경고 창이 뜰 때.** 아직 코드 서명 전이라 다음 창이 뜰 수 있습니다([코드 서명 계획](docs/signing.md)).
+
+- 브라우저: "흔히 다운로드되지 않는 파일" → **유지**
+- `install.cmd` 실행: "이 파일을 실행하시겠습니까?" → **실행**
+- "Windows의 PC 보호" → **추가 정보 → 실행**
+
+설치가 끝나면 설치한 파일의 다운로드 표시를 지우므로, 이후 실행할 때는 경고가 뜨지 않습니다.
 
 `install.ps1`이 하는 일(스크립트를 열어 직접 확인할 수 있습니다):
 
 1. 일반 권한: 설치 폴더에서 실행 중인 Glide를 종료합니다. 다른 위치에서 실행 중이면 멈추고 안내합니다.
 2. 관리자 권한(UAC 1회)
-   - `C:\Program Files\Glide\`에 복사합니다.
-   - **이 PC 전용 코드 서명 인증서**를 만들어 `glide-core.exe`에만 서명하고, 공개 인증서만 로컬 컴퓨터의 신뢰 루트에 등록한 뒤 **개인키는 바로 지웁니다**. 그래서 이후에는 누구도 이 인증서로 다른 프로그램에 서명할 수 없습니다.
-   - 다시 설치하면 새 인증서로 바꾸고 이전 인증서는 신뢰 루트에서 지웁니다.
+   - `C:\Program Files\Glide\`에 실행 파일과 제거 스크립트를 복사합니다.
+   - 복사한 파일의 다운로드 표시(Zone.Identifier)를 지웁니다.
+   - **이 PC 전용 코드 서명 인증서**를 만들어 `glide-core.exe`에만 서명합니다. 공개 인증서만 로컬 컴퓨터의 신뢰 루트에 등록하고 **개인키는 바로 지웁니다**. 그래서 이후에는 누구도 이 인증서로 다른 프로그램에 서명할 수 없습니다.
+   - 패키지의 실행 파일이 이미 SignPath Foundation 인증서로 서명돼 있으면(정식 서명 릴리스) 이 단계를 건너뜁니다.
+   - 다시 설치하면 새 인증서로 바꾸고, 이전 인증서는 신뢰 루트에서 지웁니다.
+   - "설정 → 앱 → 설치된 앱"에 **Glide for Windows**로 등록합니다.
 3. 일반 권한: 로그인 시 자동 시작(`HKCU\...\Run`), 시작 메뉴 "Glide 설정" 바로 가기, Glide 시작.
 
 | 옵션 | 설명 |
@@ -46,11 +60,37 @@ dist\glide-windows-<버전>\install.cmd                                     # UA
 | `-NoAutoStart` | 로그인 시 자동 시작하지 않음 |
 | `-DryRun` | 아무것도 바꾸지 않고 할 일만 출력 |
 
-제거는 `uninstall.cmd`입니다. 인증서(지문과 주체 이름을 확인한 것만)와 설치 폴더, 자동 시작, 바로 가기를 지우고,
+**업데이트:** 새 버전 zip을 받아 같은 방법으로 설치하면 덮어씁니다. 설정(`%APPDATA%\Glide`)은 그대로입니다.
+Glide는 네트워크 통신을 하지 않으므로 새 버전을 스스로 확인하지 않습니다.
+
+**제거:** "설정 → 앱 → 설치된 앱 → Glide for Windows → 제거"를 누르거나, 설치 폴더 또는 압축을 푼 폴더의
+`uninstall.cmd`를 실행합니다. 다음을 지웁니다.
+
+- 인증서(지문과 주체 이름을 확인한 것만)
+- 설치 폴더, "앱 및 기능" 등록
+- 자동 시작, 바로 가기
+
 설정(`%APPDATA%\Glide`)은 남깁니다.
 
 > 자체 서명 uiAccess가 최신 Windows(특히 Windows 11 24H2)에서 거부된다는 보고가 있습니다. 설치 뒤 Glide가
 > 시작되지 않거나 트레이 상태 줄이 "관리자 권한 창: 지원 안 함"이면 `-NoUiAccess`로 다시 설치해 주세요.
+> 명령 프롬프트에서 압축을 푼 폴더로 이동한 뒤 `install.cmd -NoUiAccess`를 실행합니다.
+
+### 소스에서 빌드해 설치
+
+```powershell
+winget install --id Rustlang.Rustup
+winget install --id Microsoft.VisualStudio.2022.BuildTools --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+# 새 터미널에서
+git clone https://github.com/devbattery/windows-mouse-gesture.git
+cd windows-mouse-gesture
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\package.ps1   # dist\glide-windows-<버전>\ 생성
+dist\glide-windows-<버전>\install.cmd                                     # UAC 확인 1회
+```
+
+- Build Tools의 "C++ 빌드 도구" 워크로드에는 MSVC 컴파일러와 Windows SDK가 들어 있습니다. SDK의 `rc.exe`·`mt.exe`가 필요합니다.
+- `package.ps1`은 `Cargo.lock`의 의존성 버전 그대로(`--locked`) 빌드합니다. Rust가 없으면 위 설치 방법을 안내하고 멈춥니다.
+- 배포용 zip은 `tools\archive.ps1`로 만듭니다(`dist\glide-windows-<버전>.zip`, `dist\SHA256SUMS.txt`).
 
 ## 설정 창
 
@@ -170,9 +210,14 @@ node tools/make-icon.cjs                                      # settings/icons/i
 한곳에 모았습니다. PC 앞에서 실제 마우스로, 위에서부터 차례로 확인합니다. 문제가 생기면 설정 창의
 **진단 정보 복사**(필요하면 "최근 앱 이름도 넣기")로 상황을 붙여 주세요.
 
-**0. 준비**
-- [ ] `tools\package.ps1` → `dist\glide-windows-<버전>\install.cmd`로 최신 버전을 덮어 설치(이전 인증서는 자동 정리)
+**0. 설치(M5 게이트: GitHub에서 받아 막힘없이 설치)**
+- [ ] 다른 PC에서 [Releases](https://github.com/devbattery/windows-mouse-gesture/releases)의 zip을 받고, `Get-FileHash`가 `SHA256SUMS.txt`와 같음
+- [ ] 압축 해제 → `install.cmd` → UAC 1회로 설치가 끝나고 Glide가 트레이에 나타남(이미 설치된 PC는 덮어 설치, 이전 인증서는 자동 정리)
 - [ ] 트레이 상태 줄 "관리자 권한 창: 지원", 설정 창 상태 칸 "관리자 권한 창 지원: 켜짐"
+- [ ] 시작 메뉴 "Glide 설정"으로 설정 창을 열 때 SmartScreen 경고가 뜨지 않음
+- [ ] `C:\Program Files\Glide\glide-core.exe` 속성 → 자세히에 "Glide for Windows"와 버전이 보임
+- [ ] 설정 → 앱 → 설치된 앱에 "Glide for Windows"(버전·게시자 devbattery)가 보임
+- [ ] (선택) 소스에서 빌드: `git clone` → `tools\package.ps1` → `install.cmd`
 
 **1. 우클릭 호환(M1 게이트)**
 - [ ] 단순 우클릭의 컨텍스트 메뉴가 정상: 탐색기, 바탕화면, 메모장, VS Code, Office, 브라우저
@@ -204,7 +249,10 @@ node tools/make-icon.cjs                                      # settings/icons/i
 - [ ] 제스처를 20회 이상 쓴 뒤 **길게 누르기 기준 추천**을 확인하고, 다르면 적용
 
 **5. 제거**
-- [ ] `uninstall.cmd` 뒤 신뢰 루트(`certlm.msc`)에 "Glide Local UIAccess Signing" 인증서가 남지 않음(확인 뒤 다시 설치)
+- [ ] 설정 → 앱 → 설치된 앱 → Glide for Windows → 제거: UAC 1회 뒤 창에 "제거했습니다"가 보이고 아무 키나 누르면 닫힘
+- [ ] `C:\Program Files\Glide` 폴더와 설치된 앱 목록의 항목이 사라짐
+- [ ] 신뢰 루트(`certlm.msc`)에 "Glide Local UIAccess Signing" 인증서가 남지 않음, 트레이 아이콘·자동 시작·시작 메뉴 바로 가기도 없음
+- [ ] 다시 설치해 평소처럼 사용
 
 ## 문제 앱 목록
 
@@ -245,16 +293,25 @@ src/
     shared.rs   스레드 간 공유 상태(원자 값·설정 스냅샷)
     input.rs    SendInput (주입 입력에 표식을 달아 훅이 다시 잡지 않게 함)
     log.rs / demo.rs / clock.rs  진단 로그, --demo-overlay, 고해상도 시계
-build.rs        uiaccess 기능일 때 uiAccess 매니페스트를 넣음
+build.rs        코어 버전 정보·아이콘 자원, uiaccess 기능일 때 uiAccess 매니페스트
 settings/       설정 창(Tauri 2): src/main.rs(명령), ui/(확장 설정 화면 기반 정적 파일)
 installer/      install.ps1 / uninstall.ps1 (+ .cmd)
-tools/          package.ps1, 픽스처·아이콘 생성 스크립트(Node)
+tools/          package.ps1(빌드·패키지), archive.ps1(zip·SHA256SUMS), 픽스처·아이콘 생성 스크립트(Node)
 assets/         아이콘 PNG(확장과 같은 그림)
+.github/        CI(검사·패키지), 릴리스(태그 → GitHub Release, SignPath 서명 준비), 문제 앱 보고 양식
+docs/signing.md 코드 서명 현황과 SignPath 계획
 ```
+
+### 릴리스 내는 법
+
+1. `Cargo.toml`·`settings/Cargo.toml`·`settings/tauri.conf.json`의 버전을 올리고, `CHANGELOG.md`에 그 버전 절을 씁니다.
+2. main에 push하고 CI가 통과하는지 확인합니다.
+3. `git tag v<버전>` → `git push origin v<버전>`을 실행하면 릴리스 작업이 검사·빌드·(설정돼 있으면) 서명을 하고 Release를 만듭니다.
+   태그와 `Cargo.toml` 버전이 다르면 멈춥니다.
 
 ## 알려진 제한
 
-- uiAccess는 이 PC 전용 자체 서명에 기댑니다. 공개 배포에서는 SignPath 서명으로 바꿀 예정입니다(M5).
+- uiAccess는 이 PC 전용 자체 서명에 기댑니다. SignPath 서명이 승인되면 설치 때 인증서를 만들지 않게 됩니다([docs/signing.md](docs/signing.md)).
 - 설정 파일은 사용자 권한으로 쓸 수 있으므로, 같은 사용자 권한의 다른 프로그램이 규칙을 바꿀 수 있습니다.
   파이프의 "같은 폴더의 설정 창만 허용"은 보안 경계가 아니라 보조 장치입니다. 단축키 동작은 키 조합 하나만 보냅니다.
 - 삼킨 우클릭은 창을 활성화하지 않습니다. 비활성 창 위에서 시작한 키 입력 제스처는 그 창을 전면으로 가져오지 못하면 실행하지 않고 안내합니다.
@@ -262,7 +319,8 @@ assets/         아이콘 PNG(확장과 같은 그림)
 - 오른쪽 버튼을 누른 채 판정 전에 다른 버튼을 누르면(로커 제스처), 앱은 다른 버튼 누름을 먼저 받고 오른쪽 누름을 나중에 받습니다.
 - 궤적은 제스처를 시작한 모니터에만 그립니다. 다른 모니터로 넘어간 부분은 보이지 않지만 방향 인식은 그대로 됩니다.
 - 화면 잠금·UAC 확인 창 직전에 누른 우클릭은 실행 없이 취소됩니다(Glide가 판정 중이던 누름은 앱에 전달되지 않음).
-- 서명되지 않은 개발 빌드는 SmartScreen 경고가 뜰 수 있습니다.
+- 서명 전이라 다운로드·첫 실행 때 SmartScreen 경고가 뜰 수 있습니다([설치](#설치) 참고).
+- 배포 zip에는 이 프로젝트의 `LICENSE.txt`만 들어 있습니다. 의존 라이브러리(대부분 MIT/Apache-2.0)의 라이선스 문구 모음은 아직 넣지 않았습니다.
 
 ## 개인정보
 
@@ -273,4 +331,4 @@ assets/         아이콘 PNG(확장과 같은 그림)
 
 ## 라이선스
 
-정하지 않았습니다(공개 배포 단계에서 결정).
+[MIT](LICENSE). 보안 문제는 [SECURITY.md](SECURITY.md)의 방법으로 알려 주세요.

@@ -1,0 +1,49 @@
+# main에 push하거나 PR을 열 때 로컬과 같은 검사를 하고, 설치 패키지까지 만들어 본다.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      # 외부 Action은 태그가 바뀌어도 같은 코드가 실행되도록 커밋 SHA로 고정한다.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Rust 도구 준비
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup default stable
+          rustc --version
+
+      - name: 서식 검사
+        run: cargo fmt --all --check
+
+      - name: clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: 테스트
+        run: cargo test --workspace --locked
+
+      - name: 설정 창 스크립트 구문 검사
+        run: |
+          foreach ($file in Get-ChildItem settings/ui/*.js) {
+            node --check $file.FullName
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
+
+      - name: 설치 패키지 만들기(uiAccess 매니페스트 확인 포함)
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/package.ps1
