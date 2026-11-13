@@ -33,14 +33,15 @@ jobs:
           rustup default stable
           rustc --version
 
-      - name: 검사
-        run: |
-          cargo fmt --all --check
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-          cargo clippy --workspace --all-targets --locked -- -D warnings
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-          cargo test --workspace --locked
-          if ($LASTEXITCODE -ne 0) { exit 1 }
+      # 단계를 나눠 두면 로그를 열지 않아도 어느 검사가 실패했는지 단계 이름으로 보인다.
+      - name: 서식 검사
+        run: cargo fmt --all --check
+
+      - name: clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: 테스트
+        run: cargo test --workspace --locked
 
       - name: 설치 패키지 만들기
         run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/package.ps1

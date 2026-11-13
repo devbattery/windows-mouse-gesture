@@ -197,11 +197,20 @@ mod tests {
         let result = ipc::call(&name, &Request::GetStatus, |_| true);
         assert!(matches!(result, Err(CallError::Io(_))), "{result:?}");
         // 응답을 읽지 않는 클라이언트가 있어도 서버는 다음 연결을 받는다.
-        let idle = std::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(&name)
-            .unwrap();
+        // 서버가 앞 연결을 끊고 다시 기다리기(ConnectNamedPipe) 전에는 ERROR_PIPE_BUSY가 나므로,
+        // ipc::call처럼 잠시 재시도한다(느린 CI에서 간헐적으로 실패하던 부분).
+        let idle = (0..500)
+            .find_map(|_| {
+                let opened = std::fs::OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .open(&name);
+                if opened.is_err() {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                opened.ok()
+            })
+            .expect("5초 안에 파이프에 연결하지 못했습니다");
         drop(idle);
         assert!(matches!(
             ipc::call(&name, &Request::GetStatus, |_| true),
