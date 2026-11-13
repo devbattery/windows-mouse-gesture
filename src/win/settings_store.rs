@@ -29,11 +29,8 @@ pub enum Change {
 
 impl Store {
     pub fn new() -> Self {
-        let base = std::env::var_os("APPDATA")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("."));
         Self {
-            path: base.join("Glide").join("settings.json"),
+            path: settings::file_path(),
             seen: None,
         }
     }
@@ -97,10 +94,21 @@ impl Store {
         }
     }
 
+    /// 설정 창이 보낸 설정을 저장한다. 감시 기준을 새 파일로 맞춰 자기 저장을 다시 읽지 않게 한다.
+    pub fn save(&mut self, settings: &Settings) -> std::io::Result<()> {
+        self.write(settings)?;
+        self.seen = self.stamp();
+        Ok(())
+    }
+
     fn write(&self, settings: &Settings) -> std::io::Result<()> {
         fs::create_dir_all(self.folder())?;
         let temporary = self.path.with_extension("json.tmp");
-        fs::write(&temporary, settings.to_json())?;
+        // 이름을 바꾸기 전에 내용을 디스크에 내려써야, 전원이 꺼져도 빈 파일로 교체되지 않는다.
+        let mut file = fs::File::create(&temporary)?;
+        std::io::Write::write_all(&mut file, settings.to_json().as_bytes())?;
+        file.sync_all()?;
+        drop(file);
         // Windows에서 std::fs::rename은 MoveFileExW(MOVEFILE_REPLACE_EXISTING)로 교체한다.
         fs::rename(&temporary, &self.path)
     }

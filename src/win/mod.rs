@@ -3,15 +3,18 @@
 //! 스레드 구성
 //! - UI: 오버레이 창·트레이 아이콘(`ui.rs`)
 //! - 훅: 저수준 마우스 훅, 판단만 하고 반환(`hook.rs`)
-//! - 워커: 입력 재전송·동작 실행·설정 감시·예외 판정(`worker.rs`)
+//! - 워커: 입력 재전송·동작 실행·설정 감시·예외 판정·설정 저장(`worker.rs`)
+//! - 파이프: 설정 창 요청 처리(`pipe.rs`)
 //! - 로그: `--console`일 때만 출력(`log.rs`)
 
 mod clock;
 mod demo;
 mod hook;
 mod input;
+mod launch;
 mod log;
 mod overlay;
+mod pipe;
 mod settings_store;
 mod shared;
 mod tray;
@@ -20,9 +23,13 @@ mod worker;
 
 use std::ptr::null;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc;
+use std::sync::mpsc::{self, SyncSender};
 use std::thread;
 use std::time::Duration;
+
+use glide_core::ipc::{self, Request};
+use glide_core::settings;
+use serde_json::{Value, json};
 
 use windows_sys::Win32::Foundation::{ERROR_ALREADY_EXISTS, GetLastError, HWND, TRUE};
 use windows_sys::Win32::System::Console::{
@@ -39,7 +46,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 use windows_sys::core::BOOL;
 
 use settings_store::{Change, Store};
-use shared::{HOOK_THREAD, UI_WINDOW, WM_UI_EXIT};
+use shared::{FULLSCREEN_PAUSED, HOOK_THREAD, RUNTIME_ENABLED, UI_ACCESS, UI_WINDOW, WM_UI_EXIT};
 
 const USAGE: &str = "\
 사용법: glide-core [옵션]
@@ -171,6 +178,23 @@ pub fn run() -> i32 {
         return 1;
     }
 
+    // 설정 창과 통신할 파이프. 다른 프로그램이 같은 이름을 먼저 만들었으면(이름 선점) 실행하지 않는다.
+    let pipe_server = match ipc::pipe_name().and_then(|name| pipe::create(&name)) {
+        Ok(server) => server,
+        Err(error) => {
+            let message = format!(
+                "설정 창과 통신할 통로를 만들지 못했습니다({error}).\n다른 프로그램이 같은 이름을 쓰고 있을 수 있어 실행을 멈춥니다."
+            );
+            if options.console {
+                eprintln!("{message}");
+            } else {
+                message_box(&message);
+            }
+            return 1;
+        }
+    };
+    UI_ACCESS.store(has_ui_access(), Ordering::SeqCst);
+
     // 훅 좌표를 물리 픽셀로 받고 모니터별 DPI로 임계값·오버레이를 맞추기 위해 Per-Monitor v2로 동작한다.
     // SAFETY: 프로세스 시작 직후 창을 만들기 전에 한 번 호출한다. 실패해도(구버전 Windows) 계속 실행한다.
     unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
@@ -184,6 +208,8 @@ pub fn run() -> i32 {
         }
         Change::Invalid(message) => {
             eprintln!("[설정] {message} (기본 설정으로 실행합니다)");
+            // 설정 창도 이 오류를 보여 주도록 기록한다(모르고 저장하면 파일이 기본값 기준으로 바뀐다).
+            shared::set_settings_error(Some(message.clone()));
             Some(format!("{message}\n기본 설정으로 실행합니다."))
         }
         Change::None => None,
@@ -219,6 +245,9 @@ pub fn run() -> i32 {
 
     let worker_ui = ui_tx.clone();
     let demo_ui = options.demo_overlay.then(|| ui_tx.clone());
+    let pipe_events = event_tx.clone();
+    let shutdown = event_tx.clone();
+    let settings_path = store.path().display().to_string();
     let worker = thread::Builder::new()
         .name("glide-worker".into())
         .spawn(move || worker::run(event_rx, worker_ui, store));
@@ -237,11 +266,25 @@ pub fn run() -> i32 {
         request_exit();
         let _ = ui_thread.join();
         let _ = hook_thread.join();
+        let _ = shutdown.send(worker::Event::Shutdown);
         let _ = worker.join();
         message_box("마우스 훅을 설치하지 못했습니다.");
         return 1;
     }
     HOOK_THREAD.store(hook_id, Ordering::SeqCst);
+    // 파이프 스레드는 연결을 기다리며 막혀 있으므로 기다리지 않는다(프로세스가 끝나면 함께 끝난다).
+    let pipe_thread = thread::Builder::new()
+        .name("glide-pipe".into())
+        .spawn(move || {
+            pipe::serve(
+                pipe_server,
+                |pid| ipc::is_sibling_process(pid, ipc::SETTINGS_EXE),
+                |request| respond(request, &pipe_events, &settings_path),
+            )
+        });
+    if pipe_thread.is_err() {
+        log::warn(|| "[파이프] 스레드를 만들지 못해 설정 창과 연결할 수 없습니다".into());
+    }
     if let Some(demo_ui) = demo_ui {
         thread::spawn(move || demo::run(demo_ui));
     }
@@ -274,13 +317,93 @@ pub fn run() -> i32 {
     // SAFETY: 훅 스레드 메시지 루프를 끝낸다.
     unsafe { PostThreadMessageW(hook_id, WM_QUIT, 0, 0) };
     let _ = hook_thread.join();
-    // 훅 스레드가 끝나면 채널 송신부가 사라져 워커도 끝난다.
+    // 파이프 스레드가 송신부를 들고 있어 채널이 닫히지 않으므로 워커에 종료를 알린다.
+    let _ = shutdown.send(worker::Event::Shutdown);
     let _ = worker.join();
     if options.console {
         println!("[종료] {}", stats_line());
     }
     FINISHED.store(true, Ordering::SeqCst);
     0
+}
+
+/// 설정 창 요청 하나를 처리한다(파이프 스레드).
+fn respond(request: Request, events: &SyncSender<worker::Event>, settings_path: &str) -> Value {
+    match request {
+        Request::GetStatus => {
+            let snapshot = hook::HOOK_LATENCY.snapshot();
+            let p99 = if snapshot.count() == 0 {
+                None
+            } else {
+                snapshot.percentile_upper_bound(99.0)
+            };
+            ipc::success(json!({
+                "version": env!("CARGO_PKG_VERSION"),
+                "active": shared::gestures_active(),
+                "runtimeEnabled": RUNTIME_ENABLED.load(Ordering::Relaxed),
+                "fullscreenPaused": FULLSCREEN_PAUSED.load(Ordering::Relaxed),
+                "uiAccess": UI_ACCESS.load(Ordering::Relaxed),
+                "hookCalls": snapshot.count(),
+                "hookP99Micros": p99,
+                "hookOver10ms": snapshot.count() > 0 && p99.is_none(),
+                "reinstalls": hook::REINSTALLS.load(Ordering::Relaxed),
+                "settingsPath": settings_path,
+            }))
+        }
+        Request::GetSettings => ipc::success(json!({
+            "settings": shared::settings().to_value(),
+            "error": shared::settings_error(),
+        })),
+        Request::SetSettings(value) => {
+            // 설정 창의 검증과 별개로 코어가 다시 검증한다.
+            let settings = match settings::validate(&value) {
+                Ok(settings) => settings,
+                Err(message) => return ipc::failure(message),
+            };
+            let (reply, result) = mpsc::sync_channel(1);
+            let saved = events
+                .send(worker::Event::Save {
+                    settings: Box::new(settings),
+                    reply,
+                })
+                .ok()
+                .and_then(|()| result.recv_timeout(Duration::from_secs(5)).ok());
+            match saved {
+                Some(Ok(())) => ipc::success(json!({})),
+                Some(Err(message)) => ipc::failure(message),
+                // 워커가 다른 일로 늦어진 경우다. 요청은 대기열에 남아 곧 저장될 수 있으므로 실패라고 단정하지 않는다.
+                None => ipc::failure(
+                    "저장이 늦어지고 있습니다. 잠시 뒤 다시 열어 반영됐는지 확인해 주세요.",
+                ),
+            }
+        }
+    }
+}
+
+/// 이 프로세스 토큰에 uiAccess 표시가 있는지(서명·설치 위치 조건을 통과해 실행됐는지).
+fn has_ui_access() -> bool {
+    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows_sys::Win32::Security::{GetTokenInformation, TOKEN_QUERY, TokenUIAccess};
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+
+    // SAFETY: 자기 프로세스 토큰을 조회만 하고 닫는다.
+    unsafe {
+        let mut token: HANDLE = std::ptr::null_mut();
+        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) == 0 {
+            return false;
+        }
+        let mut value: u32 = 0;
+        let mut length = 0;
+        let ok = GetTokenInformation(
+            token,
+            TokenUIAccess,
+            (&mut value as *mut u32).cast(),
+            size_of::<u32>() as u32,
+            &mut length,
+        );
+        CloseHandle(token);
+        ok != 0 && value != 0
+    }
 }
 
 fn store_path_hint() -> String {

@@ -1,6 +1,11 @@
+# 코어(이 패키지)와 설정 창(settings/)이 한 작업 공간에서 target 폴더를 함께 쓴다.
+# 그래서 두 실행 파일이 같은 폴더(target\release)에 생기고, 서로를 "같은 폴더의 실행 파일"로 확인한다.
+[workspace]
+members = [".", "settings"]
+
 [package]
 name = "glide-core"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.85"
 description = "Glide for Windows: 모든 Windows 앱에서 쓰는 우클릭 마우스 제스처"
@@ -14,6 +19,10 @@ path = "src/lib.rs"
 name = "glide-core"
 path = "src/main.rs"
 
+[features]
+# 관리자 권한 창에서도 동작하는 uiAccess 매니페스트를 넣는다(서명·Program Files 설치가 필요, build.rs 참고).
+uiaccess = []
+
 [dependencies]
 serde_json = "1"
 
@@ -23,17 +32,21 @@ windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
     "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Storage_FileSystem",
     "Win32_System_Com",
     "Win32_System_Console",
+    "Win32_System_IO",
     "Win32_System_LibraryLoader",
     "Win32_System_Performance",
+    "Win32_System_Pipes",
     "Win32_System_Threading",
     "Win32_UI_HiDpi",
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }
-# 오버레이 그리기(Direct2D·DirectWrite는 COM 인터페이스라 windows 크레이트로 쓴다)
+# COM 인터페이스: 오버레이 그리기(Direct2D·DirectWrite), 탐색기를 통한 실행(셸 디스패치)
 windows = { version = "0.62", features = [
     "Win32_Foundation",
     "Win32_Graphics_Direct2D",
@@ -41,6 +54,10 @@ windows = { version = "0.62", features = [
     "Win32_Graphics_DirectWrite",
     "Win32_Graphics_Dxgi_Common",
     "Win32_Graphics_Gdi",
+    "Win32_System_Com",
+    "Win32_System_Ole",
+    "Win32_System_Variant",
+    "Win32_UI_Shell",
 ] }
 # Direct2D 좌표 타입(Vector2). windows 0.62가 쓰는 버전과 맞춘다.
 windows-numerics = "0.3"

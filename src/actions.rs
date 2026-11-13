@@ -4,6 +4,8 @@
 //! 확장은 브라우저 API로 실행하지만 Windows 앱은 실제 키 입력이나 창 명령으로 실행하므로,
 //! 각 동작의 실행 방식([`Effect`])과 안내용 단축키 표기는 Windows 기준이다.
 
+use serde_json::{Value, json};
+
 use crate::gesture::Sequence;
 use crate::shortcut::{self, Shortcut};
 
@@ -56,16 +58,65 @@ const ACTIONS: [(&str, &str, &str, &str); 23] = [
     ("zoomReset", "원래 크기로", "Ctrl + 0", "Ctrl+0"),
     ("fullscreen", "전체 화면 전환", "F11", "F11"),
     // Windows 전용 동작
-    ("minimizeWindow", "창 최소화", "", ""),
-    ("maximizeWindow", "창 최대화 / 복원", "", ""),
-    ("closeWindow", "창 닫기", "", ""),
+    ("minimizeWindow", "창 최소화", "창 명령", ""),
+    ("maximizeWindow", "창 최대화 / 복원", "창 명령", ""),
+    ("closeWindow", "창 닫기", "닫기 요청", ""),
     ("showDesktop", "바탕 화면 보기", "Win + D", "Cmd+D"),
-    ("mediaPlayPause", "미디어 재생 / 일시정지", "", ""),
+    ("mediaPlayPause", "미디어 재생 / 일시정지", "미디어 키", ""),
 ];
+
+/// 확장에는 없는 Windows 전용 동작. 확장 호환 백업을 내보낼 때 뺀다
+/// (확장의 검증은 모르는 동작 ID를 거절한다).
+const WINDOWS_ONLY: [&str; 5] = [
+    "minimizeWindow",
+    "maximizeWindow",
+    "closeWindow",
+    "showDesktop",
+    "mediaPlayPause",
+];
+
+/// Windows에 공통 단축키가 없어 실행하지 않는 동작의 안내 문구.
+const UNSUPPORTED_HINT: &str = "Windows에서 지원하지 않는 동작";
 
 /// 설정에 쓸 수 있는 동작 ID인지(직접 지정한 단축키 "keyboard" 제외).
 pub fn is_known(id: &str) -> bool {
     ACTIONS.iter().any(|(action, ..)| *action == id)
+}
+
+/// 확장 설정·백업에서도 쓸 수 있는 동작인지. 직접 지정한 단축키("keyboard")는 확장도 같은 표기를 쓴다.
+pub fn is_extension_compatible(id: &str) -> bool {
+    id == "keyboard" || (is_known(id) && !WINDOWS_ONLY.contains(&id))
+}
+
+/// 설정 창 동작 목록 한 줄.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CatalogEntry {
+    pub id: &'static str,
+    /// 동작 이름(확장과 같은 라벨)
+    pub label: &'static str,
+    /// 이름 옆에 붙는 안내(Windows에서 보내는 입력, 실행 안 되는 이유)
+    pub hint: &'static str,
+    /// Windows에서 실행할 수 있는지(`duplicateTab`·`muteTab`은 false)
+    pub supported: bool,
+    /// 확장에는 없는 Windows 전용 동작인지
+    pub windows_only: bool,
+}
+
+/// 설정 창에 보여 줄 동작 목록(표 순서).
+pub fn catalog() -> Vec<CatalogEntry> {
+    ACTIONS
+        .iter()
+        .map(|(id, label, hint, _)| {
+            let supported = effect(id) != Effect::Unsupported;
+            CatalogEntry {
+                id,
+                label,
+                hint: if supported { hint } else { UNSUPPORTED_HINT },
+                supported,
+                windows_only: WINDOWS_ONLY.contains(id),
+            }
+        })
+        .collect()
 }
 
 /// 모든 동작 ID(설정 화면·문서용).
@@ -109,6 +160,16 @@ impl Rule {
             _ => effect(&self.action),
         }
     }
+
+    /// 설정 파일·백업에 쓰는 JSON 형태(확장 `validateRules` 결과와 같은 필드만).
+    pub fn to_value(&self) -> Value {
+        match &self.shortcut {
+            Some(shortcut) => {
+                json!({ "gesture": self.gesture, "action": self.action, "shortcut": shortcut.text })
+            }
+            None => json!({ "gesture": self.gesture, "action": self.action }),
+        }
+    }
 }
 
 /// HUD 안내 톤. 확장 오버레이의 data-tone과 같다.
@@ -146,7 +207,7 @@ pub fn rule_parts(rule: &Rule) -> (String, String) {
     match meta(&rule.action) {
         Some((_, label, hint, _)) => {
             let detail = if effect(&rule.action) == Effect::Unsupported {
-                "Windows에서 지원하지 않는 동작"
+                UNSUPPORTED_HINT
             } else if hint.is_empty() {
                 "기본 단축키 없음"
             } else {
@@ -271,5 +332,40 @@ mod tests {
         assert_eq!(rule_parts(&custom), ("새 탭".into(), "Ctrl+T".into()));
         custom.shortcut = Some(shortcut::parse("ctrl+k").unwrap());
         assert_eq!(rule_parts(&custom), ("키 입력".into(), "Ctrl+K".into()));
+    }
+
+    #[test]
+    fn catalog_marks_support_and_platform() {
+        let catalog = catalog();
+        assert_eq!(catalog.len(), ACTIONS.len());
+        let find = |id: &str| catalog.iter().find(|entry| entry.id == id).unwrap();
+        assert!(!find("muteTab").supported);
+        assert_eq!(find("muteTab").hint, UNSUPPORTED_HINT);
+        assert!(find("closeWindow").supported && find("closeWindow").windows_only);
+        assert!(!find("back").windows_only);
+        // 확장 동작은 18종이고, 확장 호환 여부와 Windows 전용 여부가 정확히 반대다.
+        assert_eq!(
+            catalog.iter().filter(|entry| !entry.windows_only).count(),
+            18
+        );
+        for entry in &catalog {
+            assert_eq!(is_extension_compatible(entry.id), !entry.windows_only);
+        }
+        assert!(is_extension_compatible("keyboard"));
+        assert!(!is_extension_compatible("unknown"));
+    }
+
+    #[test]
+    fn rule_value_keeps_only_saved_fields() {
+        let mut custom = rule("R", "keyboard");
+        custom.shortcut = Some(shortcut::parse("ctrl + k").unwrap());
+        assert_eq!(
+            custom.to_value(),
+            json!({ "gesture": "R", "action": "keyboard", "shortcut": "Ctrl+K" })
+        );
+        assert_eq!(
+            rule("L", "back").to_value(),
+            json!({ "gesture": "L", "action": "back" })
+        );
     }
 }

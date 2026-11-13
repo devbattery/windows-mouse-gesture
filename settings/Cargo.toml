@@ -1,0 +1,32 @@
+[package]
+name = "glide-settings"
+version = "0.3.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Glide for Windows 설정 창"
+publish = false
+
+[[bin]]
+name = "glide-settings"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.6", features = [] }
+
+[dependencies]
+# 설정 검증·백업 형식·파이프 프로토콜(코어와 같은 코드)
+glide-core = { path = ".." }
+tauri = { version = "2.11", features = [] }
+# 백업 파일 열기·저장 대화상자(Rust 쪽에서만 쓴다. 웹 화면은 파일 경로를 다루지 않는다)
+tauri-plugin-dialog = "2.8"
+# 두 번째 실행은 기존 창을 앞으로 가져온다
+tauri-plugin-single-instance = "2.5"
+serde_json = "1"
+
+[target.'cfg(windows)'.dependencies]
+# 코어 실행(ShellExecuteW). 일반 권한 설정 창이 실행해야 uiAccess 판이 서명 확인을 거쳐 시작된다.
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }

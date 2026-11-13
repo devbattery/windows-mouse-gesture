@@ -17,6 +17,16 @@ pub const MAX_HOLD_MS: u64 = 3_000;
 pub const DEFAULT_HOLD_MS: u32 = 400;
 const MAX_EXCLUDED: usize = 256;
 
+/// 설정 파일 위치: `%APPDATA%\Glide\settings.json`(사용자별, 로밍 프로필).
+/// 코어(읽기·쓰기)와 설정 창(코어가 꺼져 있을 때 읽기만)이 같은 규칙을 쓴다.
+pub fn file_path() -> std::path::PathBuf {
+    std::env::var_os("APPDATA")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("Glide")
+        .join("settings.json")
+}
+
 /// 검증을 통과한 설정.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Settings {
@@ -227,17 +237,10 @@ pub fn validate(value: &Value) -> Result<Settings, String> {
 }
 
 impl Settings {
-    /// 저장용 JSON. 사람이 고치기 쉽게 들여쓰기한다.
-    pub fn to_json(&self) -> String {
-        let rules: Vec<Value> = self
-            .rules
-            .iter()
-            .map(|rule| match &rule.shortcut {
-                Some(shortcut) => json!({ "gesture": rule.gesture, "action": rule.action, "shortcut": shortcut.text }),
-                None => json!({ "gesture": rule.gesture, "action": rule.action }),
-            })
-            .collect();
-        let value = json!({
+    /// 설정 파일 형식의 JSON 값(설정 창과 주고받을 때도 같은 형식을 쓴다).
+    pub fn to_value(&self) -> Value {
+        let rules: Vec<Value> = self.rules.iter().map(Rule::to_value).collect();
+        json!({
             "schemaVersion": SCHEMA_VERSION,
             "enabled": self.enabled,
             "threshold": self.threshold,
@@ -247,9 +250,13 @@ impl Settings {
                 "excludedProcesses": self.excluded_processes,
                 "autoPauseFullscreen": self.auto_pause_fullscreen,
             }
-        });
+        })
+    }
+
+    /// 저장용 JSON. 사람이 고치기 쉽게 들여쓰기한다.
+    pub fn to_json(&self) -> String {
         // serde_json 값 직렬화는 실패하지 않는다.
-        serde_json::to_string_pretty(&value).unwrap_or_default() + "\n"
+        serde_json::to_string_pretty(&self.to_value()).unwrap_or_default() + "\n"
     }
 
     pub fn is_excluded(&self, process_name: &str) -> bool {

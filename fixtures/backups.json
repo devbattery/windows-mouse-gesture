@@ -1,0 +1,172 @@
+{
+  "generatedFrom": "Glide 확장 shared.js (parseGestureBackup, actions)",
+  "extensionActions": [
+    "back",
+    "forward",
+    "reload",
+    "hardReload",
+    "newTab",
+    "newWindow",
+    "closeTab",
+    "restoreTab",
+    "previousTab",
+    "nextTab",
+    "duplicateTab",
+    "muteTab",
+    "scrollTop",
+    "scrollBottom",
+    "zoomIn",
+    "zoomOut",
+    "zoomReset",
+    "fullscreen"
+  ],
+  "cases": [
+    {
+      "input": "{\n  \"app\": \"glide-mouse-gestures\",\n  \"format\": \"glide-gestures\",\n  \"formatVersion\": 1,\n  \"exportedAt\": \"2026-11-13T09:33:37.611Z\",\n  \"gestures\": [\n    {\n      \"gesture\": \"L\",\n      \"action\": \"back\"\n    },\n    {\n      \"gesture\": \"RD\",\n      \"action\": \"keyboard\",\n      \"shortcut\": \"Ctrl+Shift+N\"\n    },\n    {\n      \"gesture\": \"UDU\",\n      \"action\": \"muteTab\"\n    }\n  ],\n  \"extensionVersion\": \"0.2.8\"\n}",
+      "gestures": [
+        {
+          "gesture": "L",
+          "action": "back"
+        },
+        {
+          "gesture": "RD",
+          "action": "keyboard",
+          "shortcut": "Ctrl+Shift+N"
+        },
+        {
+          "gesture": "UDU",
+          "action": "muteTab"
+        }
+      ]
+    },
+    {
+      "input": "﻿{\n  \"app\": \"glide-mouse-gestures\",\n  \"format\": \"glide-gestures\",\n  \"formatVersion\": 1,\n  \"exportedAt\": \"2026-11-13T09:33:37.611Z\",\n  \"gestures\": [\n    {\n      \"gesture\": \"L\",\n      \"action\": \"back\"\n    },\n    {\n      \"gesture\": \"RD\",\n      \"action\": \"keyboard\",\n      \"shortcut\": \"Ctrl+Shift+N\"\n    },\n    {\n      \"gesture\": \"UDU\",\n      \"action\": \"muteTab\"\n    }\n  ],\n  \"extensionVersion\": \"0.2.8\"\n}",
+      "gestures": [
+        {
+          "gesture": "L",
+          "action": "back"
+        },
+        {
+          "gesture": "RD",
+          "action": "keyboard",
+          "shortcut": "Ctrl+Shift+N"
+        },
+        {
+          "gesture": "UDU",
+          "action": "muteTab"
+        }
+      ]
+    },
+    {
+      "input": "[{\"gesture\":\"L\",\"action\":\"back\"},{\"gesture\":\"RD\",\"action\":\"keyboard\",\"shortcut\":\"ctrl + shift + n\"},{\"gesture\":\"UDU\",\"action\":\"muteTab\"}]",
+      "gestures": [
+        {
+          "gesture": "L",
+          "action": "back"
+        },
+        {
+          "gesture": "RD",
+          "action": "keyboard",
+          "shortcut": "Ctrl+Shift+N"
+        },
+        {
+          "gesture": "UDU",
+          "action": "muteTab"
+        }
+      ]
+    },
+    {
+      "input": "{\"format\":\"glide-gestures\",\"formatVersion\":1,\"gestures\":[]}",
+      "gestures": []
+    },
+    {
+      "input": "{\"app\":\"other\",\"format\":\"glide-gestures\",\"formatVersion\":1,\"extra\":true,\"gestures\":[{\"gesture\":\"U\",\"action\":\"duplicateTab\"}]}",
+      "gestures": [
+        {
+          "gesture": "U",
+          "action": "duplicateTab"
+        }
+      ]
+    },
+    {
+      "input": "",
+      "error": "빈 파일입니다."
+    },
+    {
+      "input": "   \n",
+      "error": "빈 파일입니다."
+    },
+    {
+      "input": "{",
+      "error": "JSON 파일을 읽지 못했습니다."
+    },
+    {
+      "input": "null",
+      "error": "Glide 제스처 파일이 아닙니다."
+    },
+    {
+      "input": "42",
+      "error": "Glide 제스처 파일이 아닙니다."
+    },
+    {
+      "input": "\"text\"",
+      "error": "Glide 제스처 파일이 아닙니다."
+    },
+    {
+      "input": "{}",
+      "error": "Glide 제스처 파일이 아닙니다."
+    },
+    {
+      "input": "{\"format\":\"other\",\"formatVersion\":1,\"gestures\":[]}",
+      "error": "Glide 제스처 파일이 아닙니다."
+    },
+    {
+      "input": "{\"format\":\"glide-gestures\",\"formatVersion\":2,\"gestures\":[]}",
+      "error": "지원하지 않는 제스처 파일 버전입니다."
+    },
+    {
+      "input": "{\"format\":\"glide-gestures\",\"formatVersion\":\"1\",\"gestures\":[]}",
+      "error": "지원하지 않는 제스처 파일 버전입니다."
+    },
+    {
+      "input": "{\"format\":\"glide-gestures\",\"formatVersion\":1}",
+      "error": "제스처 목록이 없는 파일입니다."
+    },
+    {
+      "input": "{\"format\":\"glide-gestures\",\"formatVersion\":1,\"gestures\":null}",
+      "error": "제스처 목록이 없는 파일입니다."
+    },
+    {
+      "input": "{\"format\":\"glide-gestures\",\"formatVersion\":1,\"gestures\":{\"L\":\"back\"}}",
+      "error": "제스처 목록이 없는 파일입니다."
+    },
+    {
+      "input": "[{\"gesture\":\"LL\",\"action\":\"back\"}]",
+      "error": "1번째 제스처의 방향이 올바르지 않습니다."
+    },
+    {
+      "input": "[{\"gesture\":\"L\",\"action\":\"back\"},{\"gesture\":\"L\",\"action\":\"forward\"}]",
+      "error": "2번째 제스처가 중복되었습니다."
+    },
+    {
+      "input": "[{\"gesture\":\"L\",\"action\":\"openSettings\"}]",
+      "error": "1번째 제스처의 동작이 올바르지 않습니다."
+    },
+    {
+      "input": "[{\"gesture\":\"L\",\"action\":\"keyboard\",\"shortcut\":\"Hyper+T\"}]",
+      "error": "보조 키는 Ctrl, Alt, Shift, Cmd를 한 번씩만 입력해 주세요."
+    },
+    {
+      "input": "[{\"gesture\":\"L\",\"action\":\"keyboard\"}]",
+      "error": "Ctrl+T처럼 단축키를 입력해 주세요."
+    },
+    {
+      "input": "[\"L\"]",
+      "error": "1번째 제스처 형식이 올바르지 않습니다."
+    },
+    {
+      "input": "[{\"gesture\":\"L\",\"action\":\"back\"},{\"gesture\":\"UR\",\"action\":\"back\"},{\"gesture\":\"LRL\",\"action\":\"back\"},{\"gesture\":\"URLR\",\"action\":\"back\"},{\"gesture\":\"LRLRL\",\"action\":\"back\"},{\"gesture\":\"URLRLR\",\"action\":\"back\"},{\"gesture\":\"LRLRLRL\",\"action\":\"back\"},{\"gesture\":\"URLRLRLR\",\"action\":\"back\"},{\"gesture\":\"LRLRLRLRL\",\"action\":\"back\"},{\"gesture\":\"URLRLRLRLR\",\"action\":\"back\"},{\"gesture\":\"LRLRLRLRLRL\",\"action\":\"back\"},{\"gesture\":\"URLRLRLRLRLR\",\"action\":\"back\"},{\"gesture\":\"L\",\"action\":\"back\"},{\"gesture\":\"UR\",\"action\":\"back\"},{\"gesture\":\"LRL\",\"action\":\"back\"},{\"gesture\":\"URLR\",\"action\":\"back\"},{\"gesture\":\"LRLRL\",\"action\":\"back\"},{\"gesture\":\"URLRLR\",\"action\":\"back\"},{\"gesture\":\"LRLRLRL\",\"action\":\"back\"},{\"gesture\":\"URLRLRLR\",\"action\":\"back\"},{\"gesture\":\"LRLRLRLRL\",\"action\":\"back\"},{\"gesture\":\"URLRLRLRLR\",\"action\":\"back\"},{\"gesture\":\"LRLRLRLRLRL\",\"action\":\"back\"},{\"gesture\":\"URLRLRLRLRLR\",\"action\":\"back\"},{\"gesture\":\"L\",\"action\":\"back\"},{\"gesture\":\"UR\",\"action\":\"back\"},{\"gesture\":\"LRL\",\"action\":\"back\"},{\"gesture\":\"URLR\",\"action\":\"back\"},{\"gesture\":\"LRLRL\",\"action\":\"back\"},{\"gesture\":\"URLRLR\",\"action\":\"back\"},{\"gesture\":\"LRLRLRL\",\"action\":\"back\"},{\"gesture\":\"URLRLRLR\",\"action\":\"back\"},{\"gesture\":\"LRLRLRLRL\",\"action\":\"back\"},{\"gesture\":\"URLRLRLRLR\",\"action\":\"back\"},{\"gesture\":\"LRLRLRLRLRL\",\"action\":\"back\"},{\"gesture\":\"URLRLRLRLRLR\",\"action\":\"back\"},{\"gesture\":\"L\",\"action\":\"back\"},{\"gesture\":\"UR\",\"action\":\"back\"},{\"gesture\":\"LRL\",\"action\":\"back\"},{\"gesture\":\"URLR\",\"action\":\"back\"},{\"gesture\":\"LRLRL\",\"action\":\"back\"},{\"gesture\":\"URLRLR\",\"action\":\"back\"},{\"gesture\":\"LRLRLRL\",\"action\":\"back\"},{\"gesture\":\"URLRLRLR\",\"action\":\"back\"},{\"gesture\":\"LRLRLRLRL\",\"action\":\"back\"},{\"gesture\":\"URLRLRLRLR\",\"action\":\"back\"},{\"gesture\":\"LRLRLRLRLRL\",\"action\":\"back\"},{\"gesture\":\"URLRLRLRLRLR\",\"action\":\"back\"},{\"gesture\":\"L\",\"action\":\"back\"},{\"gesture\":\"UR\",\"action\":\"back\"},{\"gesture\":\"LRL\",\"action\":\"back\"},{\"gesture\":\"URLR\",\"action\":\"back\"},{\"gesture\":\"LRLRL\",\"action\":\"back\"},{\"gesture\":\"URLRLR\",\"action\":\"back\"},{\"gesture\":\"LRLRLRL\",\"action\":\"back\"},{\"gesture\":\"URLRLRLR\",\"action\":\"back\"},{\"gesture\":\"LRLRLRLRL\",\"action\":\"back\"},{\"gesture\":\"URLRLRLRLR\",\"action\":\"back\"},{\"gesture\":\"LRLRLRLRLRL\",\"action\":\"back\"},{\"gesture\":\"URLRLRLRLRLR\",\"action\":\"back\"},{\"gesture\":\"L\",\"action\":\"back\"},{\"gesture\":\"UR\",\"action\":\"back\"},{\"gesture\":\"LRL\",\"action\":\"back\"},{\"gesture\":\"URLR\",\"action\":\"back\"},{\"gesture\":\"LRLRL\",\"action\":\"back\"}]",
+      "error": "제스처는 최대 64개까지 저장할 수 있습니다."
+    }
+  ]
+}

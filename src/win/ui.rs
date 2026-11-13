@@ -12,27 +12,28 @@ use std::sync::mpsc::{Receiver, Sender};
 
 use glide_core::actions::{Hud, Tone, gesture_hud};
 use glide_core::gesture::Sequence;
+use glide_core::ipc;
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows_sys::Win32::System::Com::{
     COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoUninitialize,
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows_sys::Win32::UI::Shell::{NIN_SELECT, NINF_KEY, ShellExecuteW};
+use windows_sys::Win32::UI::Shell::{NIN_SELECT, NINF_KEY};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu, DestroyWindow,
     DispatchMessageW, GetCursorPos, GetMessageW, KillTimer, MF_CHECKED, MF_GRAYED, MF_SEPARATOR,
     MF_STRING, MSG, PostMessageW, PostQuitMessage, RegisterClassExW, RegisterWindowMessageW,
-    SW_SHOWNORMAL, SetForegroundWindow, SetTimer, TPM_NONOTIFY, TPM_RETURNCMD, TPM_RIGHTBUTTON,
-    TrackPopupMenu, WM_CONTEXTMENU, WM_NULL, WM_TIMER, WNDCLASSEXW, WS_OVERLAPPED,
+    SetForegroundWindow, SetTimer, TPM_NONOTIFY, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu,
+    WM_CONTEXTMENU, WM_NULL, WM_TIMER, WNDCLASSEXW, WS_OVERLAPPED,
 };
 
 use super::overlay::Overlay;
 use super::shared::{
-    self, FULLSCREEN_PAUSED, RUNTIME_ENABLED, SETTINGS_ENABLED, UI_WINDOW, WM_UI_EXIT, WM_UI_TRAY,
-    WM_UI_WAKE,
+    self, FULLSCREEN_PAUSED, RUNTIME_ENABLED, SETTINGS_ENABLED, UI_ACCESS, UI_WINDOW, WM_UI_EXIT,
+    WM_UI_TRAY, WM_UI_WAKE,
 };
 use super::tray::Tray;
-use super::{hook, log};
+use super::{hook, launch, log};
 
 /// 훅·워커 → UI 스레드 사건.
 #[derive(Clone, Debug)]
@@ -76,7 +77,7 @@ const NOTICE_MS: u32 = 2_000;
 const HIDE_TIMER: usize = 1;
 
 const MENU_TOGGLE: usize = 1;
-const MENU_OPEN_FILE: usize = 2;
+const MENU_OPEN_SETTINGS: usize = 2;
 const MENU_OPEN_FOLDER: usize = 3;
 const MENU_EXIT: usize = 4;
 
@@ -130,7 +131,7 @@ pub fn run(
     ready: Sender<isize>,
     startup_notice: Option<String>,
 ) {
-    // ShellExecuteW(설정 파일 열기)를 위해 단일 스레드 아파트로 COM을 초기화한다.
+    // 탐색기를 통한 실행(launch.rs, 셸 COM 객체)을 위해 단일 스레드 아파트로 COM을 초기화한다.
     // SAFETY: 이 스레드에서 한 번 초기화하고 끝날 때 해제한다.
     let com = unsafe {
         CoInitializeEx(
@@ -388,6 +389,11 @@ fn show_menu(window: HWND) {
         state_text(),
         hook::REINSTALLS.load(Ordering::Relaxed)
     );
+    let admin_line = if UI_ACCESS.load(Ordering::Relaxed) {
+        "관리자 권한 창: 지원"
+    } else {
+        "관리자 권한 창: 지원 안 함(설치판에서 지원)"
+    };
     let enabled = RUNTIME_ENABLED.load(Ordering::Relaxed);
     // SAFETY: 메뉴를 만들어 띄우고 바로 해제한다. 메뉴 전에 창을 전면으로 두어야 바깥을 누르면 닫힌다.
     let command = unsafe {
@@ -403,10 +409,11 @@ fn show_menu(window: HWND) {
             MENU_TOGGLE,
             "제스처 사용",
         );
-        item(MF_STRING, MENU_OPEN_FILE, "설정 파일 열기");
+        item(MF_STRING, MENU_OPEN_SETTINGS, "설정 열기");
         item(MF_STRING, MENU_OPEN_FOLDER, "설정 폴더 열기");
         AppendMenuW(menu, MF_SEPARATOR, 0, null());
         item(MF_STRING | MF_GRAYED, 0, &status);
+        item(MF_STRING | MF_GRAYED, 0, admin_line);
         AppendMenuW(menu, MF_SEPARATOR, 0, null());
         item(MF_STRING, MENU_EXIT, "종료");
         let mut cursor = POINT { x: 0, y: 0 };
@@ -431,15 +438,12 @@ fn show_menu(window: HWND) {
             log::info(|| format!("[트레이] 제스처 {}", if enabled { "끔" } else { "켬" }));
             with_ui(|ui| ui.tray.set_tip(&tip()));
         }
-        MENU_OPEN_FILE => {
-            if let Some(path) = with_ui(|ui| ui.settings_file.clone()) {
-                // 연결 프로그램이 없는 PC도 있으므로 메모장으로 연다.
-                open("notepad.exe", Some(&format!("\"{}\"", path.display())));
-            }
-        }
+        MENU_OPEN_SETTINGS => open_settings(),
         MENU_OPEN_FOLDER => {
-            if let Some(folder) = with_ui(|ui| ui.settings_folder.clone()) {
-                open(&folder.display().to_string(), None);
+            if let Some(folder) = with_ui(|ui| ui.settings_folder.clone())
+                && !launch::open(&folder.display().to_string(), None)
+            {
+                log::warn(|| "[트레이] 설정 폴더를 열지 못했습니다".into());
             }
         }
         MENU_EXIT => {
@@ -450,22 +454,20 @@ fn show_menu(window: HWND) {
     }
 }
 
-fn open(file: &str, parameters: Option<&str>) {
-    let file = wide(file);
-    let parameters = parameters.map(wide);
-    // SAFETY: 널 종료 문자열로 셸 실행을 요청한다.
-    let result = unsafe {
-        ShellExecuteW(
-            null_mut(),
-            wide("open").as_ptr(),
-            file.as_ptr(),
-            parameters.as_ref().map_or(null(), |p| p.as_ptr()),
-            null(),
-            SW_SHOWNORMAL,
-        )
+/// 설정 창(같은 폴더의 glide-settings.exe)을 연다. 없으면(개발 빌드 등) settings.json을 메모장으로 연다.
+fn open_settings() {
+    let settings_app = std::env::current_exe()
+        .ok()
+        .and_then(|me| me.parent().map(|folder| folder.join(ipc::SETTINGS_EXE)))
+        .filter(|path| path.is_file());
+    let opened = match settings_app {
+        Some(app) => launch::open(&app.display().to_string(), None),
+        None => with_ui(|ui| ui.settings_file.clone()).is_some_and(|path| {
+            // 연결 프로그램이 없는 PC도 있으므로 메모장으로 연다.
+            launch::open("notepad.exe", Some(&format!("\"{}\"", path.display())))
+        }),
     };
-    // 32 이하는 실패 코드다.
-    if (result as isize) <= 32 {
-        log::warn(|| "[트레이] 파일을 열지 못했습니다".into());
+    if !opened {
+        log::warn(|| "[트레이] 설정을 열지 못했습니다".into());
     }
 }

@@ -1,0 +1,161 @@
+<!doctype html>
+<!-- 크롬 확장 options.html(커밋 770047b) 구조를 따르고, 상태 칸·Windows 설정·내보내기 2종을 더했다. -->
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Glide 설정</title>
+  <link rel="stylesheet" href="settings.css">
+  <script src="shared.js" defer></script>
+  <script src="settings.js" defer></script>
+</head>
+<body>
+  <main>
+    <header class="top">
+      <div class="brand">
+        <span class="mark" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M7 5v8.5a3.5 3.5 0 0 0 3.5 3.5H18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="m15 14 3 3-3 3" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="7" cy="5" r="1.8" fill="currentColor"/></svg></span>
+        <span class="brand-text"><span class="brand-name">Glide</span><span class="brand-sub">Windows 마우스 제스처</span></span>
+      </div>
+      <label class="switch"><span>제스처 사용</span><input id="enabled" type="checkbox" role="switch" checked></label>
+    </header>
+
+    <section id="core" class="card status-card" aria-labelledby="core-title" data-state="loading">
+      <div class="status-main">
+        <span class="status-dot" aria-hidden="true"></span>
+        <div>
+          <h2 id="core-title" class="status-title">상태 확인 중…</h2>
+          <p id="core-detail" class="status-detail"></p>
+        </div>
+      </div>
+      <ul id="core-facts" class="status-facts" aria-label="실행 정보"></ul>
+      <button id="start-core" type="button" class="primary" hidden>Glide 시작</button>
+    </section>
+    <p id="settings-error" class="notice" role="alert" hidden></p>
+
+    <section class="card intro" aria-labelledby="how-title">
+      <div class="intro-copy">
+        <h1 id="how-title">우클릭한 채로 그리고, 놓으면 실행됩니다.</h1>
+        <ol class="steps">
+          <li><span class="step-no" aria-hidden="true">1</span>우클릭 유지</li>
+          <li><span class="step-no" aria-hidden="true">2</span>방향 그리기</li>
+          <li><span class="step-no" aria-hidden="true">3</span>버튼 놓기</li>
+        </ol>
+        <p class="intro-note">움직이지 않고 놓으면 기본 메뉴 · <kbd>Shift</kbd>·<kbd>Ctrl</kbd>·<kbd>Alt</kbd>·<kbd>Win</kbd> + 우클릭은 항상 기본 메뉴 · 길게 누르면 원래 우클릭 · <kbd>Esc</kbd>는 취소</p>
+      </div>
+      <svg class="intro-art" width="200" height="120" viewBox="0 0 200 120" fill="none" aria-hidden="true"><circle cx="40" cy="22" r="6" fill="currentColor"/><path d="M40 22v52a20 20 0 0 0 20 20h104" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><path d="m152 82 12 12-12 12" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </section>
+
+    <section class="card gestures" aria-labelledby="mine-title">
+      <div class="card-heading">
+        <div>
+          <h2 id="mine-title">나의 제스처 <span id="rule-count" class="count"></span></h2>
+          <p>그림을 누르면 다시 그리고, 목록에서 동작이나 단축키를 고릅니다.</p>
+        </div>
+        <button id="add" type="button" class="primary with-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>제스처 추가</button>
+      </div>
+      <table class="rules">
+        <thead class="sr-only"><tr><th scope="col">제스처</th><th scope="col">실행할 동작</th><th scope="col">삭제</th></tr></thead>
+        <tbody id="rules"></tbody>
+      </table>
+      <p id="empty" class="empty" hidden>아직 제스처가 없습니다. 자주 쓰는 동작을 추가해 보세요.</p>
+    </section>
+
+    <div class="pair">
+      <section class="card sensitivity" aria-labelledby="sens-title">
+        <div class="card-row">
+          <div>
+            <h2 id="sens-title">인식 감도</h2>
+            <p>이 거리 이상 움직여야 방향으로 인식합니다. 화면 배율에 맞춰 자동으로 조정됩니다.</p>
+          </div>
+          <div class="sens-preview" aria-hidden="true"><span id="sens-ring"><span></span></span></div>
+        </div>
+        <div class="slider">
+          <label for="threshold">민감하게</label>
+          <input id="threshold" type="range" min="12" max="48" step="1" value="22" aria-label="제스처 인식 최소 거리" aria-describedby="distance">
+          <span class="slider-end" aria-hidden="true">안정적으로</span>
+          <output id="distance" for="threshold">22 px</output>
+        </div>
+      </section>
+
+      <section class="card backup" aria-labelledby="backup-title">
+        <div>
+          <h2 id="backup-title">백업과 이동</h2>
+          <p id="backup-hint">제스처와 단축키만 JSON 파일로 주고받습니다. 크롬 확장 Glide의 백업도 불러올 수 있고, 불러온 뒤 <strong>변경사항 저장</strong>을 눌러야 적용됩니다.</p>
+          <p id="backup-status" class="backup-status" role="status" aria-live="polite" hidden></p>
+        </div>
+        <div class="backup-actions">
+          <button id="export-gestures" type="button" class="secondary with-icon" aria-describedby="backup-hint"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>내보내기</button>
+          <button id="export-extension" type="button" class="secondary with-icon" title="창 최소화처럼 Windows에서만 되는 동작은 빼고 내보냅니다."><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>확장용 내보내기</button>
+          <button id="import-gestures" type="button" class="secondary with-icon" aria-describedby="backup-hint"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 10.5v-8M4.5 6 8 2.5 11.5 6M3 13.5h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>불러오기</button>
+        </div>
+      </section>
+    </div>
+
+    <section class="card windows" aria-labelledby="windows-title">
+      <h2 id="windows-title">Windows 동작</h2>
+      <div class="field">
+        <div>
+          <h3 id="hold-title">길게 누르면 원래 우클릭</h3>
+          <p>움직이지 않고 이 시간 이상 누르고 있으면 제스처 대신 원래 우클릭으로 넘깁니다. 탐색기의 우클릭 드래그(복사·이동 메뉴)에 씁니다.</p>
+        </div>
+        <div class="slider">
+          <label for="hold">짧게</label>
+          <input id="hold" type="range" min="100" max="3000" step="50" value="400" aria-labelledby="hold-title" aria-describedby="hold-value">
+          <span class="slider-end" aria-hidden="true">길게</span>
+          <output id="hold-value" for="hold">0.40초</output>
+        </div>
+      </div>
+      <label class="check"><input id="auto-pause" type="checkbox" checked><span>전체 화면 게임·프레젠테이션 중에는 자동으로 멈춤<small>테두리 없는 창 모드 게임은 구분할 수 없으니 아래 예외 앱에 넣어 주세요.</small></span></label>
+      <div class="field">
+        <h3 id="excluded-title">제스처를 쓰지 않을 앱</h3>
+        <p>여기 넣은 앱에서는 우클릭이 원래대로 동작합니다. 원격 데스크톱·가상 머신·그림 도구·게임에 권장합니다.</p>
+        <ul id="excluded" class="excluded" aria-labelledby="excluded-title"></ul>
+        <form id="exclude-form" class="add-row">
+          <input id="exclude-input" type="text" maxlength="260" placeholder="실행 파일 이름 (예: mstsc.exe)" autocomplete="off" spellcheck="false" aria-labelledby="excluded-title" aria-describedby="exclude-error">
+          <button type="submit" class="secondary">추가</button>
+        </form>
+        <p id="exclude-error" class="field-error" role="status"></p>
+      </div>
+    </section>
+
+    <section class="tips" aria-labelledby="tips-title">
+      <h2 id="tips-title">알아 두면 좋은 점</h2>
+      <ul>
+        <li><strong>단축키는 실제 키 입력으로 보냅니다.</strong> 제스처를 시작한 창에서 <kbd>Ctrl+T</kbd> 같은 키를 누른 것과 같아서, 앱마다 결과가 다를 수 있습니다.</li>
+        <li>크롬 확장 Glide를 함께 켜 두면 브라우저에서는 이 앱이 우클릭을 먼저 받아 확장이 동작하지 않습니다. 확장은 꺼 주세요. 브라우저는 확장으로 쓰고 싶다면 <kbd>chrome.exe</kbd>를 예외 앱에 넣으세요.</li>
+        <li>관리자 권한으로 실행된 창(작업 관리자 등)에서는 위 상태 칸의 "관리자 권한 창 지원"이 켜져 있어야 동작합니다. 설치 스크립트로 설치하면 켜집니다.</li>
+      </ul>
+    </section>
+
+    <footer class="savebar">
+      <div class="savebar-inner">
+        <span id="status" role="status" aria-live="polite"></span>
+        <button id="reset" type="button" class="text-button">기본 제스처로 되돌리기</button>
+        <button id="save" type="button" class="primary" disabled>변경사항 저장</button>
+      </div>
+      <p class="privacy">기록 수집 없이 · 외부 통신 없이 · 이 PC에만 저장</p>
+    </footer>
+  </main>
+
+  <dialog id="recorder" aria-labelledby="record-title" aria-describedby="record-desc">
+    <div class="dialog-heading">
+      <div>
+        <h2 id="record-title">제스처 그리기</h2>
+        <p id="record-desc">아래 영역에서 우클릭한 채로 그린 뒤 놓으세요. 최대 12방향까지 이어 그릴 수 있습니다.</p>
+      </div>
+      <button id="cancel-record" type="button" class="icon-button" aria-label="닫기"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="m4.5 4.5 9 9m0-9-9 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+    </div>
+    <div id="draw-area"><canvas id="record-canvas"></canvas><span id="record-placeholder">우클릭 + 드래그</span></div>
+    <div class="record-result">
+      <span id="record-glyph" class="glyph glyph-lg" aria-hidden="true"></span>
+      <div class="record-text">
+        <strong id="recorded" aria-live="polite">아직 그리지 않았어요</strong>
+        <span id="record-error" role="status"></span>
+      </div>
+    </div>
+    <div class="record-binding"><span class="field-label" id="record-binding-label">실행할 동작</span><div id="record-binding"></div></div>
+    <div class="dialog-footer"><button id="clear-record" type="button" class="secondary">다시 그리기</button><button id="use-record" type="button" class="primary" disabled>이 제스처 사용</button></div>
+  </dialog>
+</body>
+</html>

@@ -11,10 +11,8 @@ use std::time::{Duration, Instant};
 
 use glide_core::actions::Effect;
 use glide_core::gesture::Sequence;
-use windows_sys::Win32::Foundation::CloseHandle;
-use windows_sys::Win32::System::Threading::{
-    OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
-};
+use glide_core::ipc;
+use glide_core::settings::Settings;
 use windows_sys::Win32::UI::Shell::{
     QUNS_PRESENTATION_MODE, QUNS_RUNNING_D3D_FULL_SCREEN, SHQueryUserNotificationState,
 };
@@ -42,9 +40,9 @@ pub enum Injection {
     Release,
 }
 
-/// 훅 스레드 → 워커 스레드 메시지. 할당 없이 복사되는 값만 담는다.
+/// 훅·파이프 스레드 → 워커 스레드 메시지. 훅이 보내는 값은 할당 없이 만든다.
 /// `target`은 우클릭을 시작한 지점의 최상위 창 핸들 값이다.
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 pub enum Event {
     Inject {
         kind: Injection,
@@ -60,15 +58,27 @@ pub enum Event {
     Resolve {
         pid: u32,
     },
+    /// 설정 창이 보낸(코어가 검증한) 설정을 저장하고 반영해 달라. 결과를 `reply`로 돌려준다.
+    Save {
+        settings: Box<Settings>,
+        reply: SyncSender<Result<(), String>>,
+    },
+    /// 종료. 파이프 스레드가 송신부를 끝까지 들고 있어 채널이 닫히지 않으므로 따로 알린다.
+    Shutdown,
 }
 
 const PERIOD: Duration = Duration::from_secs(1);
 
-/// 채널이 닫힐 때까지(훅 스레드 종료) 사건과 주기 작업을 처리한다.
+/// `Shutdown`을 받거나 채널이 닫힐 때까지 사건과 주기 작업을 처리한다.
 pub fn run(events: Receiver<Event>, ui: SyncSender<UiEvent>, mut store: Store) {
     let mut last_periodic = Instant::now();
     loop {
         match events.recv_timeout(PERIOD) {
+            Ok(Event::Shutdown) => break,
+            Ok(Event::Save { settings, reply }) => {
+                let result = save(&mut store, *settings, &ui);
+                let _ = reply.try_send(result);
+            }
             Ok(event) => handle(event, &ui),
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => break,
@@ -113,9 +123,7 @@ fn handle(event: Event, ui: &SyncSender<UiEvent>) {
         }
         Event::Resolve { pid } => {
             let name = process_name(pid);
-            let excluded = name
-                .as_deref()
-                .is_some_and(|name| shared::settings().is_excluded(name));
+            let excluded = name.as_deref().is_some_and(is_excluded);
             if excluded {
                 log::info(|| {
                     format!(
@@ -132,6 +140,8 @@ fn handle(event: Event, ui: &SyncSender<UiEvent>) {
             target,
             pid,
         } => execute(sequence, invalid, target, pid, ui),
+        // run에서 처리한다(저장소가 필요하거나 루프를 끝낸다).
+        Event::Save { .. } | Event::Shutdown => {}
     }
 }
 
@@ -157,7 +167,7 @@ fn execute(sequence: Sequence, invalid: bool, target: isize, pid: u32, ui: &Sync
         return;
     };
     // 낙관적 시작 뒤 판정이 늦게 끝난 예외 앱: 실행하지 않는다.
-    if process_name(pid).is_some_and(|name| settings.is_excluded(&name)) {
+    if process_name(pid).is_some_and(|name| is_excluded(&name)) {
         notify(ui, sequence, "제스처를 쓰지 않는 앱입니다");
         return;
     }
@@ -258,17 +268,49 @@ fn check_settings(store: &mut Store, ui: &SyncSender<UiEvent>) {
         Change::None => {}
         Change::Loaded(settings) => {
             log::info(|| format!("[설정] 다시 읽음 · 제스처 {}개", settings.rules.len()));
-            shared::publish(settings);
-            // 예외 목록이 바뀌었을 수 있으므로 훅의 판정 캐시를 비운다.
-            post_hook(WM_HOOK_CLEAR_EXCLUSIONS, 0, 0);
+            apply(settings);
         }
         Change::Invalid(message) => {
             log::warn(|| format!("[설정] {message} (이전 설정을 계속 씁니다)"));
+            shared::set_settings_error(Some(message.clone()));
             if ui.try_send(UiEvent::SettingsError { message }).is_ok() {
                 ui::wake();
             }
         }
     }
+}
+
+/// 검증된 설정을 모든 스레드에 반영한다.
+fn apply(settings: Settings) {
+    shared::set_settings_error(None);
+    shared::publish(settings);
+    // 예외 목록이 바뀌었을 수 있으므로 훅의 판정 캐시를 비운다.
+    post_hook(WM_HOOK_CLEAR_EXCLUSIONS, 0, 0);
+}
+
+/// 설정 창에서 받은 설정을 파일에 저장하고 바로 반영한다.
+fn save(store: &mut Store, settings: Settings, ui: &SyncSender<UiEvent>) -> Result<(), String> {
+    store
+        .save(&settings)
+        .map_err(|error| format!("설정 파일을 저장하지 못했습니다: {error}"))?;
+    log::info(|| {
+        format!(
+            "[설정] 설정 창에서 저장 · 제스처 {}개",
+            settings.rules.len()
+        )
+    });
+    let before = shared::gestures_active();
+    apply(settings);
+    if shared::gestures_active() != before && ui.try_send(UiEvent::StateChanged).is_ok() {
+        ui::wake();
+    }
+    Ok(())
+}
+
+/// 제스처를 쓰지 않는 앱인지. 설정 창은 제스처를 녹화하는 곳이라 항상 제외한다.
+fn is_excluded(process_name: &str) -> bool {
+    process_name.eq_ignore_ascii_case(ipc::SETTINGS_EXE)
+        || shared::settings().is_excluded(process_name)
 }
 
 /// 전체 화면 D3D 게임·프레젠테이션 모드면 제스처를 잠시 멈춘다.
@@ -318,30 +360,8 @@ fn app_name(window: isize) -> String {
 /// 프로세스의 실행 파일 이름(소문자 아님, 예: notepad.exe). 창 제목은 개인 정보가 담길 수 있어 읽지 않는다.
 /// 관리자 권한 프로세스처럼 열 수 없으면 None.
 fn process_name(pid: u32) -> Option<String> {
-    if pid == 0 {
-        return None;
-    }
-    // SAFETY: 최소 권한(이름 조회)으로 열고, 사용 후 반드시 닫는다.
-    unsafe {
-        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
-        if process.is_null() {
-            return None;
-        }
-        let mut buffer = [0u16; 1024];
-        let mut length = buffer.len() as u32;
-        let ok = QueryFullProcessImageNameW(
-            process,
-            PROCESS_NAME_WIN32,
-            buffer.as_mut_ptr(),
-            &mut length,
-        );
-        CloseHandle(process);
-        if ok == 0 {
-            return None;
-        }
-        let path = String::from_utf16_lossy(&buffer[..length as usize]);
-        Some(path.rsplit('\\').next().unwrap_or(&path).to_owned())
-    }
+    let path = ipc::process_path(pid)?;
+    Some(path.file_name()?.to_string_lossy().into_owned())
 }
 
 fn foreground_root() -> isize {

@@ -4,7 +4,7 @@
 //! 읽으며, `RwLock<Arc<_>>` 스냅샷을 짧게 복제해 쓴다.
 
 use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, Ordering};
-use std::sync::{Arc, LazyLock, RwLock};
+use std::sync::{Arc, LazyLock, Mutex, RwLock};
 
 use glide_core::settings::Settings;
 use windows_sys::Win32::UI::WindowsAndMessaging::WM_APP;
@@ -17,6 +17,8 @@ pub static SETTINGS_ENABLED: AtomicBool = AtomicBool::new(true);
 pub static FULLSCREEN_PAUSED: AtomicBool = AtomicBool::new(false);
 pub static THRESHOLD: AtomicU32 = AtomicU32::new(glide_core::gesture::DEFAULT_THRESHOLD);
 pub static HOLD_MS: AtomicU32 = AtomicU32::new(glide_core::settings::DEFAULT_HOLD_MS);
+/// 이 프로세스가 uiAccess 토큰으로 실행됐는지(관리자 권한 창에서도 동작). 시작할 때 한 번 정한다.
+pub static UI_ACCESS: AtomicBool = AtomicBool::new(false);
 
 /// 훅 스레드 ID(스레드 메시지 대상)
 pub static HOOK_THREAD: AtomicU32 = AtomicU32::new(0);
@@ -37,6 +39,23 @@ pub const WM_UI_TRAY: u32 = WM_APP + 12;
 
 static SETTINGS: LazyLock<RwLock<Arc<Settings>>> =
     LazyLock::new(|| RwLock::new(Arc::new(Settings::default())));
+
+/// 설정 파일의 마지막 오류(올바르지 않은 값 등). 설정 창이 보여 준다. 정상으로 읽으면 비운다.
+static SETTINGS_ERROR: Mutex<Option<String>> = Mutex::new(None);
+
+pub fn settings_error() -> Option<String> {
+    SETTINGS_ERROR.lock().map_or_else(
+        |poisoned| poisoned.into_inner().clone(),
+        |guard| guard.clone(),
+    )
+}
+
+pub fn set_settings_error(message: Option<String>) {
+    match SETTINGS_ERROR.lock() {
+        Ok(mut guard) => *guard = message,
+        Err(poisoned) => *poisoned.into_inner() = message,
+    }
+}
 
 /// 현재 설정 스냅샷.
 pub fn settings() -> Arc<Settings> {

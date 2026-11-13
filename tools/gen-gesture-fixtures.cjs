@@ -132,3 +132,57 @@ fs.writeFileSync(shortcutOutput, JSON.stringify({
   cases: shortcuts
 }, null, 2) + "\n");
 console.log(`${shortcuts.length}개 픽스처를 ${path.relative(process.cwd(), shortcutOutput)}에 썼습니다.`);
+
+// 백업 파일(parseGestureBackup) 픽스처: 확장이 받아들이는 규칙 목록 또는 오류 문구를 기록한다.
+// 앱은 같은 입력에 같은 결과를 내되, Windows에서 실행할 수 없는 동작(탭 복제·음소거)은 건너뛴 목록으로 따로 돌려준다.
+const sample = [
+  { gesture: "L", action: "back" },
+  { gesture: "RD", action: "keyboard", shortcut: "ctrl + shift + n" },
+  { gesture: "UDU", action: "muteTab" }
+];
+const exported = JSON.stringify(kit.createGestureBackup(sample, "0.2.8"), null, 2);
+const tooMany = Array.from({ length: 65 }, (_, index) => ({
+  gesture: "LRLRLRLRLRLR".slice(0, (index % 12) + 1).replace(/^(.)/, index % 2 ? "U" : "$1"),
+  action: "back"
+}));
+const backupInputs = [
+  exported,
+  "﻿" + exported,
+  JSON.stringify(sample),
+  JSON.stringify({ format: "glide-gestures", formatVersion: 1, gestures: [] }),
+  JSON.stringify({ app: "other", format: "glide-gestures", formatVersion: 1, extra: true, gestures: [{ gesture: "U", action: "duplicateTab" }] }),
+  "",
+  "   \n",
+  "{",
+  "null",
+  "42",
+  "\"text\"",
+  "{}",
+  JSON.stringify({ format: "other", formatVersion: 1, gestures: [] }),
+  JSON.stringify({ format: "glide-gestures", formatVersion: 2, gestures: [] }),
+  JSON.stringify({ format: "glide-gestures", formatVersion: "1", gestures: [] }),
+  JSON.stringify({ format: "glide-gestures", formatVersion: 1 }),
+  JSON.stringify({ format: "glide-gestures", formatVersion: 1, gestures: null }),
+  JSON.stringify({ format: "glide-gestures", formatVersion: 1, gestures: { L: "back" } }),
+  JSON.stringify([{ gesture: "LL", action: "back" }]),
+  JSON.stringify([{ gesture: "L", action: "back" }, { gesture: "L", action: "forward" }]),
+  JSON.stringify([{ gesture: "L", action: "openSettings" }]),
+  JSON.stringify([{ gesture: "L", action: "keyboard", shortcut: "Hyper+T" }]),
+  JSON.stringify([{ gesture: "L", action: "keyboard" }]),
+  JSON.stringify(["L"]),
+  JSON.stringify(tooMany)
+];
+const backups = backupInputs.map(input => {
+  try {
+    return { input, gestures: kit.parseGestureBackup(input) };
+  } catch (error) {
+    return { input, error: error.message };
+  }
+});
+const backupOutput = path.join(__dirname, "..", "fixtures", "backups.json");
+fs.writeFileSync(backupOutput, JSON.stringify({
+  generatedFrom: "Glide 확장 shared.js (parseGestureBackup, actions)",
+  extensionActions: Object.keys(kit.actions),
+  cases: backups
+}, null, 2) + "\n");
+console.log(`${backups.length}개 픽스처를 ${path.relative(process.cwd(), backupOutput)}에 썼습니다.`);
