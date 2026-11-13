@@ -20,8 +20,9 @@ $version = (Select-String -Path (Join-Path $root 'Cargo.toml') -Pattern '^versio
 $name = "glide-windows-$version"
 $dist = Join-Path $root 'dist'
 $folder = Join-Path $dist $name
+# 배포 zip에는 의존 라이브러리 라이선스 고지(THIRD-PARTY-NOTICES.txt, cargo-about 필요)도 반드시 넣는다.
 foreach ($file in 'install.cmd', 'install.ps1', 'uninstall.cmd', 'uninstall.ps1', 'version.txt', 'LICENSE.txt',
-    'bin\glide-core.exe', 'bin\glide-core-uiaccess.exe', 'bin\glide-settings.exe') {
+    'THIRD-PARTY-NOTICES.txt', 'bin\glide-core.exe', 'bin\glide-core-uiaccess.exe', 'bin\glide-settings.exe') {
     if (-not (Test-Path -LiteralPath (Join-Path $folder $file))) { throw "$folder 에 $file 이 없습니다. 먼저 tools\package.ps1을 실행해 주세요." }
 }
 

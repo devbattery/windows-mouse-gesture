@@ -108,11 +108,22 @@ function Install-Files {
     $hadUninstallKey = Test-Path -LiteralPath $UninstallKey
     try {
         Invoke-Step "설치 폴더 준비: $InstallDir" { New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null }
-        Invoke-Step '실행 파일·제거 스크립트 복사' {
+        Invoke-Step '실행 파일·제거 스크립트·라이선스 문서 복사' {
             Copy-Item -LiteralPath $coreSource -Destination $core -Force
             Copy-Item -LiteralPath (Join-Path $Package 'bin\glide-settings.exe') -Destination $InstallDir -Force
             # "앱 및 기능"의 제거 버튼이 패키지 폴더 없이도 동작하도록 제거 스크립트를 함께 둔다.
             Copy-Item -LiteralPath (Join-Path $Package 'uninstall.ps1'), (Join-Path $Package 'uninstall.cmd') -Destination $InstallDir -Force
+            # 설정 창 "Glide 정보"의 라이선스 버튼이 여는 파일. 소스에서 직접 만든 패키지에는 고지 파일이 없을 수 있다.
+            # 그때는 이전 설치의 고지가 지금 실행 파일과 어긋나지 않도록 지운다.
+            foreach ($doc in 'LICENSE.txt', 'THIRD-PARTY-NOTICES.txt') {
+                $source = Join-Path $Package $doc
+                $target = Join-Path $InstallDir $doc
+                if (Test-Path -LiteralPath $source) {
+                    Copy-Item -LiteralPath $source -Destination $InstallDir -Force
+                } elseif (Test-Path -LiteralPath $target) {
+                    Remove-Item -LiteralPath $target -Force
+                }
+            }
         }
         # 인터넷에서 받은 zip을 풀면 파일마다 다운로드 표시(Zone.Identifier)가 붙고, 복사해도 그대로 남는다.
         # 남아 있으면 실행할 때마다 SmartScreen 확인 창이 뜰 수 있으므로, 사용자가 설치를 실행한 것을

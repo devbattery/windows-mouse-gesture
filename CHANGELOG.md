@@ -3,6 +3,19 @@
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)을 씁니다.
 릴리스 작업(`.github/workflows/release.yml`)이 해당 버전 절을 GitHub Release 노트로 씁니다.
 
+## [0.5.2] - 2026-11-14
+
+### 추가
+
+- 배포 zip과 설치 폴더에 의존 라이브러리 라이선스 고지(`THIRD-PARTY-NOTICES.txt`, cargo-about으로 생성)를 넣었습니다.
+  허용 목록(`about.toml`) 밖의 라이선스가 들어오면 패키지 만들기가 멈춥니다.
+- 설정 창 **Glide 정보**: 버전, 라이선스, "새 버전 확인"(브라우저로 GitHub Releases 열기), "라이선스"·"오픈소스 고지" 열기.
+  Glide가 직접 인터넷에 접속하지는 않습니다.
+
+### 바뀜
+
+- CI가 의존성·빌드 결과를 캐시해 두 번째 실행부터 빨라집니다(릴리스 작업은 캐시 없이 빌드).
+
 ## [0.5.1] - 2026-11-13
 
 공개 배포(M5). 첫 공개 릴리스입니다. 0.5.0은 릴리스 작업의 테스트 단계에서 멈춰 배포되지 않았고, 그 내용을 이 버전에 담았습니다.
@@ -72,4 +85,5 @@
 
 - 전역 마우스 훅과 제스처 인식(크롬 확장 Glide와 같은 규칙), 단순 우클릭 다시 보내기, 길게 누르기 통과.
 
+[0.5.2]: https://github.com/devbattery/windows-mouse-gesture/releases/tag/v0.5.2
 [0.5.1]: https://github.com/devbattery/windows-mouse-gesture/releases/tag/v0.5.1

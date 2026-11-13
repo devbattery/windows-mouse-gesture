@@ -58,6 +58,22 @@ Copy-Item (Join-Path $root 'LICENSE') (Join-Path $output 'LICENSE.txt')
 # 설치 스크립트가 install.json·"앱 및 기능"에 기록할 버전(PowerShell에서 실행 파일 자원을 읽지 않고 쓰도록)
 Set-Content -LiteralPath (Join-Path $output 'version.txt') -Value $version -Encoding ASCII
 
+# 의존 라이브러리 라이선스 고지(THIRD-PARTY-NOTICES.txt). 설정은 about.toml, 템플릿은 tools\about.hbs.
+# 허용 목록 밖의 라이선스가 있거나 라이선스를 판별하지 못하면 --fail로 멈춘다.
+$notices = Join-Path $output 'THIRD-PARTY-NOTICES.txt'
+# cargo 하위 명령은 PATH의 cargo-about.exe다. Windows PowerShell 5.1에서 실행 파일의 오류 출력을 돌리면
+# ErrorActionPreference=Stop 때문에 바로 멈추므로, 실행해 보지 않고 파일이 있는지로 확인한다.
+if (Get-Command cargo-about -ErrorAction SilentlyContinue) {
+    Invoke-Cargo @('about', 'generate', '--workspace', '--locked', '--fail', '-c', 'about.toml',
+        '-o', $notices, 'tools\about.hbs')
+} elseif ($env:GITHUB_ACTIONS -eq 'true') {
+    # 배포 zip에는 고지가 꼭 들어가야 하므로 CI에서는 건너뛰지 않는다.
+    throw 'cargo-about을 찾지 못했습니다(cargo install cargo-about --version 0.9.3 --locked --features cli).'
+} else {
+    # 소스에서 직접 빌드해 이 PC에만 설치하는 경우는 막지 않는다.
+    Write-Warning 'cargo-about이 없어 THIRD-PARTY-NOTICES.txt를 만들지 않았습니다(배포 zip을 만들 때는 필요).'
+}
+
 # uiAccess판에만 uiAccess="true"가 들어갔는지 확인한다(Windows SDK의 mt.exe).
 $mt = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\mt.exe" -ErrorAction SilentlyContinue |
     Sort-Object FullName -Descending | Select-Object -First 1

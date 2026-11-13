@@ -125,6 +125,14 @@ output{min-width:52px;text-align:right;font-weight:650;color:var(--text);font-va
 .backup .backup-status[data-error=true]{color:var(--danger)}
 #backup-hint strong{color:var(--text);font-weight:650}
 
+/* Glide 정보 */
+.about{padding:20px 24px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px 20px}
+.about>div:first-child{flex:1 1 320px}
+.about p{margin-top:2px}
+.about strong{color:var(--text);font-weight:650}
+.about .about-status{color:var(--danger);font-weight:600}
+.about-actions{display:flex;gap:8px;flex-wrap:wrap}
+
 /* 도움말 */
 .tips{padding:4px 4px 0}
 .tips h2{font-size:15px;margin-bottom:10px}
@@ -176,7 +184,8 @@ dialog[open]{display:flex;flex-direction:column;gap:18px}
   .rules td:nth-child(2){grid-column:1 / -1;grid-row:2}
   .gesture-button{width:auto;max-width:100%}
   .binding{max-width:none}
-  .sensitivity,.backup{padding:18px 16px}
+  .sensitivity,.backup,.about{padding:18px 16px}
+  .about-actions .secondary{flex:1 1 120px}
   .slider{flex-wrap:wrap}
   .slider input{flex-basis:100%;order:3}
   .slider output{margin-left:auto}

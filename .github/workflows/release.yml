@@ -33,6 +33,11 @@ jobs:
           rustup default stable
           rustc --version
 
+      # 의존 라이브러리 라이선스 고지(THIRD-PARTY-NOTICES.txt) 생성 도구. 버전을 고정한다.
+      # 릴리스는 캐시를 쓰지 않고 매번 깨끗하게 빌드한다(캐시 오염이 배포물에 들어가지 않도록).
+      - name: 라이선스 고지 도구 설치
+        run: cargo install cargo-about --version 0.9.3 --locked --features cli
+
       # 단계를 나눠 두면 로그를 열지 않아도 어느 검사가 실패했는지 단계 이름으로 보인다.
       - name: 서식 검사
         run: cargo fmt --all --check

@@ -148,6 +148,41 @@ fn start_core() -> Result<(), String> {
     }
 }
 
+/// 새 버전을 확인하는 곳. 앱은 직접 인터넷에 접속하지 않고, 사용자가 누르면 브라우저로 연다.
+const RELEASES_URL: &str = "https://github.com/devbattery/windows-mouse-gesture/releases/latest";
+
+/// "Glide 정보" 칸의 버튼. 웹 화면은 종류 이름만 보내고, 여는 주소·파일은 여기서 정한 것만 쓴다.
+/// - `releases`: GitHub Releases 페이지(기본 브라우저)
+/// - `license`, `notices`: 설치 폴더의 LICENSE.txt, THIRD-PARTY-NOTICES.txt(기본 텍스트 편집기)
+#[tauri::command(async)]
+fn open_info(kind: String) -> Result<(), String> {
+    let target = match kind.as_str() {
+        "releases" => RELEASES_URL.to_string(),
+        "license" | "notices" => {
+            let name = if kind == "license" {
+                "LICENSE.txt"
+            } else {
+                "THIRD-PARTY-NOTICES.txt"
+            };
+            std::env::current_exe()
+                .ok()
+                .and_then(|me| me.parent().map(|folder| folder.join(name)))
+                .filter(|path| path.is_file())
+                .ok_or(format!(
+                    "{name} 파일이 설정 창과 같은 폴더에 없습니다. 설치 스크립트로 설치하면 함께 복사됩니다."
+                ))?
+                .display()
+                .to_string()
+        }
+        _ => return Err("알 수 없는 항목입니다.".into()),
+    };
+    if shell_open(&target) {
+        Ok(())
+    } else {
+        Err("열지 못했습니다.".into())
+    }
+}
+
 #[cfg(windows)]
 fn shell_open(file: &str) -> bool {
     use windows_sys::Win32::UI::Shell::ShellExecuteW;
@@ -333,6 +368,7 @@ fn main() {
             copy_text,
             save,
             start_core,
+            open_info,
             import_backup,
             export_backup
         ])

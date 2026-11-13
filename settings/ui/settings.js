@@ -772,6 +772,21 @@ window.addEventListener("beforeunload", event => {
   if (isDirty()) { event.preventDefault(); event.returnValue = ""; }
 });
 
+// ── Glide 정보 칸 ──
+// 버튼은 종류 이름만 보내고, 실제로 여는 주소·파일은 설정 창(Rust)이 정한다.
+for (const button of document.querySelectorAll("[data-info]")) {
+  button.addEventListener("click", async () => {
+    const node = $("#about-status");
+    node.hidden = true;
+    try {
+      await invoke("open_info", { kind: button.dataset.info });
+    } catch (error) {
+      node.textContent = String(error);
+      node.hidden = false;
+    }
+  });
+}
+
 async function load() {
   const data = await invoke("load");
   applyCatalog(data.catalog);
@@ -779,6 +794,7 @@ async function load() {
   settings = data.settings;
   renderCore(data.core);
   showSettingsError(data.settingsError);
+  $("#about-version").textContent = `Glide ${data.version}`;
   $("#save").dataset.dirty = "false";
   $("#save").disabled = true;
   render();

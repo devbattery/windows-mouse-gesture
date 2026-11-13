@@ -91,6 +91,8 @@ dist\glide-windows-<버전>\install.cmd                                     # UA
 - Build Tools의 "C++ 빌드 도구" 워크로드에는 MSVC 컴파일러와 Windows SDK가 들어 있습니다. SDK의 `rc.exe`·`mt.exe`가 필요합니다.
 - `package.ps1`은 `Cargo.lock`의 의존성 버전 그대로(`--locked`) 빌드합니다. Rust가 없으면 위 설치 방법을 안내하고 멈춥니다.
 - 배포용 zip은 `tools\archive.ps1`로 만듭니다(`dist\glide-windows-<버전>.zip`, `dist\SHA256SUMS.txt`).
+  zip에는 의존 라이브러리 라이선스 고지(`THIRD-PARTY-NOTICES.txt`)가 꼭 들어가야 해서 [cargo-about](https://github.com/EmbarkStudios/cargo-about)이 필요합니다
+  (`cargo install cargo-about --version 0.9.3 --locked --features cli`). 이 PC에 설치만 할 때는 없어도 경고만 하고 넘어갑니다.
 
 ## 설정 창
 
@@ -217,6 +219,7 @@ node tools/make-icon.cjs                                      # settings/icons/i
 - [ ] 시작 메뉴 "Glide 설정"으로 설정 창을 열 때 SmartScreen 경고가 뜨지 않음
 - [ ] `C:\Program Files\Glide\glide-core.exe` 속성 → 자세히에 "Glide for Windows"와 버전이 보임
 - [ ] 설정 → 앱 → 설치된 앱에 "Glide for Windows"(버전·게시자 devbattery)가 보임
+- [ ] 설정 창 **Glide 정보**: 버전이 맞고, "새 버전 확인"은 브라우저로 Releases를, "라이선스"·"오픈소스 고지"는 메모장으로 파일을 엶
 - [ ] (선택) 소스에서 빌드: `git clone` → `tools\package.ps1` → `install.cmd`
 
 **1. 우클릭 호환(M1 게이트)**
@@ -296,7 +299,8 @@ src/
 build.rs        코어 버전 정보·아이콘 자원, uiaccess 기능일 때 uiAccess 매니페스트
 settings/       설정 창(Tauri 2): src/main.rs(명령), ui/(확장 설정 화면 기반 정적 파일)
 installer/      install.ps1 / uninstall.ps1 (+ .cmd)
-tools/          package.ps1(빌드·패키지), archive.ps1(zip·SHA256SUMS), 픽스처·아이콘 생성 스크립트(Node)
+tools/          package.ps1(빌드·패키지), archive.ps1(zip·SHA256SUMS), about.hbs(라이선스 고지 템플릿), 픽스처·아이콘 생성 스크립트(Node)
+about.toml      라이선스 고지 설정(대상·허용 라이선스, cargo-about)
 assets/         아이콘 PNG(확장과 같은 그림)
 .github/        CI(검사·패키지), 릴리스(태그 → GitHub Release, SignPath 서명 준비), 문제 앱 보고 양식
 docs/signing.md 코드 서명 현황과 SignPath 계획
@@ -320,7 +324,6 @@ docs/signing.md 코드 서명 현황과 SignPath 계획
 - 궤적은 제스처를 시작한 모니터에만 그립니다. 다른 모니터로 넘어간 부분은 보이지 않지만 방향 인식은 그대로 됩니다.
 - 화면 잠금·UAC 확인 창 직전에 누른 우클릭은 실행 없이 취소됩니다(Glide가 판정 중이던 누름은 앱에 전달되지 않음).
 - 서명 전이라 다운로드·첫 실행 때 SmartScreen 경고가 뜰 수 있습니다([설치](#설치) 참고).
-- 배포 zip에는 이 프로젝트의 `LICENSE.txt`만 들어 있습니다. 의존 라이브러리(대부분 MIT/Apache-2.0)의 라이선스 문구 모음은 아직 넣지 않았습니다.
 
 ## 개인정보
 
