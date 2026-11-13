@@ -1,9 +1,9 @@
 [package]
 name = "glide-core"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.85"
-description = "Glide for Windows: 모든 Windows 앱에서 쓰는 우클릭 마우스 제스처 (M1 프로토타입)"
+description = "Glide for Windows: 모든 Windows 앱에서 쓰는 우클릭 마우스 제스처"
 publish = false
 
 [lib]
@@ -14,23 +14,39 @@ path = "src/lib.rs"
 name = "glide-core"
 path = "src/main.rs"
 
+[dependencies]
+serde_json = "1"
+
 [target.'cfg(windows)'.dependencies]
+# 훅·입력·창·트레이처럼 COM이 필요 없는 Win32 API
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
     "Win32_Security",
+    "Win32_System_Com",
     "Win32_System_Console",
     "Win32_System_LibraryLoader",
     "Win32_System_Performance",
     "Win32_System_Threading",
     "Win32_UI_HiDpi",
     "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }
+# 오버레이 그리기(Direct2D·DirectWrite는 COM 인터페이스라 windows 크레이트로 쓴다)
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Direct2D",
+    "Win32_Graphics_Direct2D_Common",
+    "Win32_Graphics_DirectWrite",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Graphics_Gdi",
+] }
+# Direct2D 좌표 타입(Vector2). windows 0.62가 쓰는 버전과 맞춘다.
+windows-numerics = "0.3"
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
 
 [profile.release]
 lto = true

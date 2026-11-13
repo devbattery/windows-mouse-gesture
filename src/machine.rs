@@ -29,6 +29,8 @@ pub enum Input {
     OtherDown,
     /// 판정 대기 중 일정 시간 움직이지 않음(길게 누르기 → 원래 우클릭 드래그로 통과)
     HoldTimeout,
+    /// 판정 대기 중에 대상 앱이 예외 앱으로 밝혀짐(낙관적 시작 후 비동기 판정 결과)
+    Excluded,
     /// 제스처 중 Esc
     Cancel,
     /// 우리가 다시 보낸 오른쪽 누름이 훅을 통과함
@@ -56,7 +58,11 @@ pub enum Command {
     /// 오른쪽 뗌만 다시 보낸다(다시 보낸 누름보다 실제 뗌이 먼저 온 경우)
     InjectRightUp,
     GestureStarted,
-    GestureChanged(Sequence),
+    /// 방향 시퀀스가 늘었거나 무효(최대 획 수 초과)가 됨
+    GestureChanged {
+        sequence: Sequence,
+        invalid: bool,
+    },
     GestureFinished {
         sequence: Sequence,
         invalid: bool,
@@ -211,7 +217,10 @@ impl Machine {
                         if gesture.sequence().is_empty() {
                             output
                         } else {
-                            output.with(Command::GestureChanged(gesture.sequence()))
+                            output.with(Command::GestureChanged {
+                                sequence: gesture.sequence(),
+                                invalid: gesture.invalid(),
+                            })
                         }
                     } else {
                         self.state = State::Pending(gesture);
@@ -219,13 +228,17 @@ impl Machine {
                     }
                 }
                 State::Gesturing(mut gesture) => {
-                    let before = gesture.sequence();
+                    let before = (gesture.sequence(), gesture.invalid());
                     gesture.feed(x, y);
                     self.state = State::Gesturing(gesture);
-                    if gesture.sequence() == before {
+                    // 방향이 늘었거나 최대 획 수를 넘어 무효가 됐을 때만 알린다.
+                    if (gesture.sequence(), gesture.invalid()) == before {
                         Output::new(Pass)
                     } else {
-                        Output::new(Pass).with(Command::GestureChanged(gesture.sequence()))
+                        Output::new(Pass).with(Command::GestureChanged {
+                            sequence: gesture.sequence(),
+                            invalid: gesture.invalid(),
+                        })
                     }
                 }
                 _ => Output::new(Pass),
@@ -252,6 +265,17 @@ impl Machine {
                     Output::new(Pass).with(Command::InjectRightDown)
                 }
                 // 이미 지난 타이머
+                _ => Output::new(Pass),
+            },
+            Input::Excluded => match self.state {
+                // 아직 제스처로 확정되지 않았으면 삼켰던 누름을 돌려주고 원래 우클릭으로 넘긴다.
+                State::Pending(_) => {
+                    self.state = State::Passthrough { down_seen: false };
+                    Output::new(Pass)
+                        .with(Command::StopHoldTimer)
+                        .with(Command::InjectRightDown)
+                }
+                // 이미 제스처로 확정됐으면 그대로 둔다(실행 단계에서 예외 앱이면 실행하지 않음).
                 _ => Output::new(Pass),
             },
             Input::Cancel => match self.state {
@@ -324,7 +348,10 @@ mod tests {
                 StopHoldTimer,
                 StartEscPoll,
                 GestureStarted,
-                GestureChanged(left)
+                GestureChanged {
+                    sequence: left,
+                    invalid: false
+                }
             ]
         );
         assert!(machine.is_gesturing());
@@ -438,6 +465,27 @@ mod tests {
             commands(&again),
             [StopEscPoll, GestureCancelled, StartHoldTimer]
         );
+    }
+
+    #[test]
+    fn excluded_app_gets_its_press_back() {
+        let mut machine = Machine::default();
+        down(&mut machine, true);
+        let excluded = machine.handle(Input::Excluded);
+        assert_eq!(commands(&excluded), [StopHoldTimer, InjectRightDown]);
+        machine.handle(Input::OwnRightDownSeen);
+        assert_eq!(
+            machine
+                .handle(Input::RightUp { x: 100.0, y: 100.0 })
+                .verdict,
+            Pass
+        );
+        // 대기 상태나 제스처 중에 늦게 온 판정은 무시한다
+        assert!(commands(&machine.handle(Input::Excluded)).is_empty());
+        down(&mut machine, true);
+        machine.handle(Input::Move { x: 200.0, y: 100.0 });
+        assert!(commands(&machine.handle(Input::Excluded)).is_empty());
+        assert!(machine.is_gesturing());
     }
 
     #[test]

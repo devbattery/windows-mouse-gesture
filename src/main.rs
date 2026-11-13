@@ -1,4 +1,7 @@
-//! Glide for Windows 상주 프로세스(M1 프로토타입, 콘솔 실행).
+//! Glide for Windows 상주 프로세스.
+//!
+//! 콘솔 창 없이 트레이 아이콘으로 실행된다(`--console`이면 진단 로그를 콘솔에 출력).
+#![cfg_attr(all(windows, not(test)), windows_subsystem = "windows")]
 
 #[cfg(windows)]
 mod win;

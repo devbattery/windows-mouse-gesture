@@ -101,3 +101,34 @@ fs.writeFileSync(output, JSON.stringify({
   cases: fixtures
 }, null, 2) + "\n");
 console.log(`${fixtures.length}개 픽스처를 ${path.relative(process.cwd(), output)}에 썼습니다.`);
+
+// 단축키 파서(parseShortcut) 픽스처: 정상 입력은 표기·키 코드·보조 키를, 잘못된 입력은 오류 문구를 기록한다.
+const shortcutInputs = [
+  "Ctrl+T", "ctrl + shift + t", "Alt+Left", "alt+right", "Shift+F5", "F11", "f24", "F25", "F0",
+  "Ctrl++", "Ctrl + +", "Ctrl+=", "Ctrl+-", "Ctrl+0", "Shift+1", "Cmd+D", "command+option+k", "Meta+[",
+  "Space", "spacebar", "Enter", "return", "Esc", "Tab", "Backspace", "Del", "Insert", "Home", "End",
+  "PgUp", "pgdn", "Up", "Down", "Ctrl+Home", "Ctrl+End", "Shift+/", "Ctrl+?", "Ctrl+Shift+`", "Ctrl+~",
+  "Ctrl+;", "Ctrl+:", "Alt+'", "Alt+\"", "Ctrl+,", "Ctrl+<", "Ctrl+.", "Ctrl+\\", "Ctrl+|", "Ctrl+]",
+  "Ctrl+}", "Ctrl+_", "", "   ", "Ctrl+", "+T", "Ctrl+Ctrl+T", "Hyper+T", "Ctrl+Shift", "Ctrl+Alt+Shift+Cmd+Z",
+  "Ctrl+한", "x".repeat(81), "Ctrl+ArrowLeft", "ArrowDown", "Option+Shift+F12"
+];
+const shortcuts = shortcutInputs.map(input => {
+  try {
+    const parsed = kit.parseShortcut(input);
+    return {
+      input,
+      ok: {
+        text: parsed.text, keyCode: parsed.keyCode,
+        ctrl: parsed.ctrlKey, alt: parsed.altKey, shift: parsed.shiftKey, meta: parsed.metaKey
+      }
+    };
+  } catch (error) {
+    return { input, error: error.message };
+  }
+});
+const shortcutOutput = path.join(__dirname, "..", "fixtures", "shortcuts.json");
+fs.writeFileSync(shortcutOutput, JSON.stringify({
+  generatedFrom: "Glide 확장 shared.js (parseShortcut)",
+  cases: shortcuts
+}, null, 2) + "\n");
+console.log(`${shortcuts.length}개 픽스처를 ${path.relative(process.cwd(), shortcutOutput)}에 썼습니다.`);

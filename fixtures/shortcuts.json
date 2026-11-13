@@ -1,0 +1,632 @@
+{
+  "generatedFrom": "Glide 확장 shared.js (parseShortcut)",
+  "cases": [
+    {
+      "input": "Ctrl+T",
+      "ok": {
+        "text": "Ctrl+T",
+        "keyCode": 84,
+        "ctrl": true,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "ctrl + shift + t",
+      "ok": {
+        "text": "Ctrl+Shift+T",
+        "keyCode": 84,
+        "ctrl": true,
+        "alt": false,
+        "shift": true,
+        "meta": false
+      }
+    },
+    {
+      "input": "Alt+Left",
+      "ok": {
+        "text": "Alt+ArrowLeft",
+        "keyCode": 37,
+        "ctrl": false,
+        "alt": true,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "alt+right",
+      "ok": {
+        "text": "Alt+ArrowRight",
+        "keyCode": 39,
+        "ctrl": false,
+        "alt": true,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "Shift+F5",
+      "ok": {
+        "text": "Shift+F5",
+        "keyCode": 116,
+        "ctrl": false,
+        "alt": false,
+        "shift": true,
+        "meta": false
+      }
+    },
+    {
+      "input": "F11",
+      "ok": {
+        "text": "F11",
+        "keyCode": 122,
+        "ctrl": false,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "f24",
+      "ok": {
+        "text": "F24",
+        "keyCode": 135,
+        "ctrl": false,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "F25",
+      "error": "지원하지 않는 키입니다. 예: Ctrl+T, Alt+Left, Shift+F, Space"
+    },
+    {
+      "input": "F0",
+      "error": "지원하지 않는 키입니다. 예: Ctrl+T, Alt+Left, Shift+F, Space"
+    },
+    {
+      "input": "Ctrl++",
+      "ok": {
+        "text": "Ctrl+Shift+=",
+        "keyCode": 187,
+        "ctrl": true,
+        "alt": false,
+        "shift": true,
+        "meta": false
+      }
+    },
+    {
+      "input": "Ctrl + +",
+      "ok": {
+        "text": "Ctrl+Shift+=",
+        "keyCode": 187,
+        "ctrl": true,
+        "alt": false,
+        "shift": true,
+        "meta": false
+      }
+    },
+    {
+      "input": "Ctrl+=",
+      "ok": {
+        "text": "Ctrl+=",
+        "keyCode": 187,
+        "ctrl": true,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "Ctrl+-",
+      "ok": {
+        "text": "Ctrl+-",
+        "keyCode": 189,
+        "ctrl": true,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "Ctrl+0",
+      "ok": {
+        "text": "Ctrl+0",
+        "keyCode": 48,
+        "ctrl": true,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "Shift+1",
+      "ok": {
+        "text": "Shift+1",
+        "keyCode": 49,
+        "ctrl": false,
+        "alt": false,
+        "shift": true,
+        "meta": false
+      }
+    },
+    {
+      "input": "Cmd+D",
+      "ok": {
+        "text": "Cmd+D",
+        "keyCode": 68,
+        "ctrl": false,
+        "alt": false,
+        "shift": false,
+        "meta": true
+      }
+    },
+    {
+      "input": "command+option+k",
+      "ok": {
+        "text": "Alt+Cmd+K",
+        "keyCode": 75,
+        "ctrl": false,
+        "alt": true,
+        "shift": false,
+        "meta": true
+      }
+    },
+    {
+      "input": "Meta+[",
+      "ok": {
+        "text": "Cmd+[",
+        "keyCode": 219,
+        "ctrl": false,
+        "alt": false,
+        "shift": false,
+        "meta": true
+      }
+    },
+    {
+      "input": "Space",
+      "ok": {
+        "text": "Space",
+        "keyCode": 32,
+        "ctrl": false,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "spacebar",
+      "ok": {
+        "text": "Space",
+        "keyCode": 32,
+        "ctrl": false,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "Enter",
+      "ok": {
+        "text": "Enter",
+        "keyCode": 13,
+        "ctrl": false,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "return",
+      "ok": {
+        "text": "Enter",
+        "keyCode": 13,
+        "ctrl": false,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "Esc",
+      "ok": {
+        "text": "Escape",
+        "keyCode": 27,
+        "ctrl": false,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "Tab",
+      "ok": {
+        "text": "Tab",
+        "keyCode": 9,
+        "ctrl": false,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "Backspace",
+      "ok": {
+        "text": "Backspace",
+        "keyCode": 8,
+        "ctrl": false,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "Del",
+      "ok": {
+        "text": "Delete",
+        "keyCode": 46,
+        "ctrl": false,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "Insert",
+      "ok": {
+        "text": "Insert",
+        "keyCode": 45,
+        "ctrl": false,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "Home",
+      "ok": {
+        "text": "Home",
+        "keyCode": 36,
+        "ctrl": false,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "End",
+      "ok": {
+        "text": "End",
+        "keyCode": 35,
+        "ctrl": false,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "PgUp",
+      "ok": {
+        "text": "PageUp",
+        "keyCode": 33,
+        "ctrl": false,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "pgdn",
+      "ok": {
+        "text": "PageDown",
+        "keyCode": 34,
+        "ctrl": false,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "Up",
+      "ok": {
+        "text": "ArrowUp",
+        "keyCode": 38,
+        "ctrl": false,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "Down",
+      "ok": {
+        "text": "ArrowDown",
+        "keyCode": 40,
+        "ctrl": false,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "Ctrl+Home",
+      "ok": {
+        "text": "Ctrl+Home",
+        "keyCode": 36,
+        "ctrl": true,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "Ctrl+End",
+      "ok": {
+        "text": "Ctrl+End",
+        "keyCode": 35,
+        "ctrl": true,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "Shift+/",
+      "ok": {
+        "text": "Shift+/",
+        "keyCode": 191,
+        "ctrl": false,
+        "alt": false,
+        "shift": true,
+        "meta": false
+      }
+    },
+    {
+      "input": "Ctrl+?",
+      "ok": {
+        "text": "Ctrl+Shift+/",
+        "keyCode": 191,
+        "ctrl": true,
+        "alt": false,
+        "shift": true,
+        "meta": false
+      }
+    },
+    {
+      "input": "Ctrl+Shift+`",
+      "ok": {
+        "text": "Ctrl+Shift+`",
+        "keyCode": 192,
+        "ctrl": true,
+        "alt": false,
+        "shift": true,
+        "meta": false
+      }
+    },
+    {
+      "input": "Ctrl+~",
+      "ok": {
+        "text": "Ctrl+Shift+`",
+        "keyCode": 192,
+        "ctrl": true,
+        "alt": false,
+        "shift": true,
+        "meta": false
+      }
+    },
+    {
+      "input": "Ctrl+;",
+      "ok": {
+        "text": "Ctrl+;",
+        "keyCode": 186,
+        "ctrl": true,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "Ctrl+:",
+      "ok": {
+        "text": "Ctrl+Shift+;",
+        "keyCode": 186,
+        "ctrl": true,
+        "alt": false,
+        "shift": true,
+        "meta": false
+      }
+    },
+    {
+      "input": "Alt+'",
+      "ok": {
+        "text": "Alt+'",
+        "keyCode": 222,
+        "ctrl": false,
+        "alt": true,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "Alt+\"",
+      "ok": {
+        "text": "Alt+Shift+'",
+        "keyCode": 222,
+        "ctrl": false,
+        "alt": true,
+        "shift": true,
+        "meta": false
+      }
+    },
+    {
+      "input": "Ctrl+,",
+      "ok": {
+        "text": "Ctrl+,",
+        "keyCode": 188,
+        "ctrl": true,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "Ctrl+<",
+      "ok": {
+        "text": "Ctrl+Shift+,",
+        "keyCode": 188,
+        "ctrl": true,
+        "alt": false,
+        "shift": true,
+        "meta": false
+      }
+    },
+    {
+      "input": "Ctrl+.",
+      "ok": {
+        "text": "Ctrl+.",
+        "keyCode": 190,
+        "ctrl": true,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "Ctrl+\\",
+      "ok": {
+        "text": "Ctrl+\\",
+        "keyCode": 220,
+        "ctrl": true,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "Ctrl+|",
+      "ok": {
+        "text": "Ctrl+Shift+\\",
+        "keyCode": 220,
+        "ctrl": true,
+        "alt": false,
+        "shift": true,
+        "meta": false
+      }
+    },
+    {
+      "input": "Ctrl+]",
+      "ok": {
+        "text": "Ctrl+]",
+        "keyCode": 221,
+        "ctrl": true,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "Ctrl+}",
+      "ok": {
+        "text": "Ctrl+Shift+]",
+        "keyCode": 221,
+        "ctrl": true,
+        "alt": false,
+        "shift": true,
+        "meta": false
+      }
+    },
+    {
+      "input": "Ctrl+_",
+      "ok": {
+        "text": "Ctrl+Shift+-",
+        "keyCode": 189,
+        "ctrl": true,
+        "alt": false,
+        "shift": true,
+        "meta": false
+      }
+    },
+    {
+      "input": "",
+      "error": "Ctrl+T처럼 단축키를 입력해 주세요."
+    },
+    {
+      "input": "   ",
+      "error": "Ctrl+T처럼 단축키를 입력해 주세요."
+    },
+    {
+      "input": "Ctrl+",
+      "error": "지원하지 않는 키입니다. 예: Ctrl+T, Alt+Left, Shift+F, Space"
+    },
+    {
+      "input": "+T",
+      "error": "보조 키는 Ctrl, Alt, Shift, Cmd를 한 번씩만 입력해 주세요."
+    },
+    {
+      "input": "Ctrl+Ctrl+T",
+      "error": "보조 키는 Ctrl, Alt, Shift, Cmd를 한 번씩만 입력해 주세요."
+    },
+    {
+      "input": "Hyper+T",
+      "error": "보조 키는 Ctrl, Alt, Shift, Cmd를 한 번씩만 입력해 주세요."
+    },
+    {
+      "input": "Ctrl+Shift",
+      "error": "지원하지 않는 키입니다. 예: Ctrl+T, Alt+Left, Shift+F, Space"
+    },
+    {
+      "input": "Ctrl+Alt+Shift+Cmd+Z",
+      "ok": {
+        "text": "Ctrl+Alt+Shift+Cmd+Z",
+        "keyCode": 90,
+        "ctrl": true,
+        "alt": true,
+        "shift": true,
+        "meta": true
+      }
+    },
+    {
+      "input": "Ctrl+한",
+      "error": "지원하지 않는 키입니다. 예: Ctrl+T, Alt+Left, Shift+F, Space"
+    },
+    {
+      "input": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "error": "Ctrl+T처럼 단축키를 입력해 주세요."
+    },
+    {
+      "input": "Ctrl+ArrowLeft",
+      "ok": {
+        "text": "Ctrl+ArrowLeft",
+        "keyCode": 37,
+        "ctrl": true,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "ArrowDown",
+      "ok": {
+        "text": "ArrowDown",
+        "keyCode": 40,
+        "ctrl": false,
+        "alt": false,
+        "shift": false,
+        "meta": false
+      }
+    },
+    {
+      "input": "Option+Shift+F12",
+      "ok": {
+        "text": "Alt+Shift+F12",
+        "keyCode": 123,
+        "ctrl": false,
+        "alt": true,
+        "shift": true,
+        "meta": false
+      }
+    }
+  ]
+}

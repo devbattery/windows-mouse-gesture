@@ -83,6 +83,9 @@ impl Snapshot {
 
     /// 사람이 읽을 한 줄 요약.
     pub fn summary(&self) -> String {
+        if self.count() == 0 {
+            return "훅 호출 0회(아직 마우스 입력 없음)".into();
+        }
         let bound = |percent| match self.percentile_upper_bound(percent) {
             Some(us) => format!("<{us}µs"),
             None => format!(">={}µs", BOUNDS_US[BOUNDS_US.len() - 1]),

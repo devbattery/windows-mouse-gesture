@@ -70,6 +70,23 @@ impl Sequence {
         std::str::from_utf8(&self.bytes[..self.len()]).unwrap_or("")
     }
 
+    /// "← ↓"처럼 화살표로 표기한다(확장 `arrows`와 같음).
+    pub fn arrows(&self) -> String {
+        let mut text = String::with_capacity(self.len() * 4);
+        for (index, byte) in self.bytes[..self.len()].iter().enumerate() {
+            if index > 0 {
+                text.push(' ');
+            }
+            text.push(match byte {
+                b'L' => '←',
+                b'R' => '→',
+                b'U' => '↑',
+                _ => '↓',
+            });
+        }
+        text
+    }
+
     fn push(&mut self, direction: Direction) {
         // 호출 측(Gesture::feed)이 MAX_STROKES를 넘지 않게 보장한다.
         if self.len() < MAX_STROKES {

@@ -4,10 +4,13 @@
 //! 자기 입력을 다시 가로채지 않는다(무한 루프 방지).
 
 use std::mem::size_of;
+
+use glide_core::shortcut::Shortcut;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
     INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT, KEYEVENTF_EXTENDEDKEY,
     KEYEVENTF_KEYUP, MAPVK_VK_TO_VSC, MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, MOUSEINPUT,
-    MapVirtualKeyW, SendInput, VIRTUAL_KEY,
+    MapVirtualKeyW, SendInput, VIRTUAL_KEY, VK_CONTROL, VK_LWIN, VK_MEDIA_PLAY_PAUSE, VK_MENU,
+    VK_SHIFT,
 };
 
 /// 우리가 주입한 입력의 표식("GLID").
@@ -79,14 +82,39 @@ pub fn right_up() -> bool {
     send(&[mouse(MOUSEEVENTF_RIGHTUP)])
 }
 
+/// 설정의 단축키를 보낸다. 확장의 Cmd(meta)는 Win 키로 보낸다.
+pub fn shortcut(shortcut: &Shortcut) -> bool {
+    let mut modifiers = Vec::with_capacity(4);
+    if shortcut.ctrl {
+        modifiers.push(VK_CONTROL);
+    }
+    if shortcut.alt {
+        modifiers.push(VK_MENU);
+    }
+    if shortcut.shift {
+        modifiers.push(VK_SHIFT);
+    }
+    if shortcut.meta {
+        modifiers.push(VK_LWIN);
+    }
+    chord(&modifiers, shortcut.vk, shortcut.extended)
+}
+
+/// 미디어 재생/일시정지 키(확장 키보드 영역).
+pub fn media_play_pause() -> bool {
+    chord(&[], VK_MEDIA_PLAY_PAUSE, true)
+}
+
 /// 보조 키 + 키 하나를 누르고 뗀다. 예: Alt + ←
 /// `extended`는 방향키·Home·End처럼 확장 키보드 영역의 키일 때 true.
-pub fn chord(modifiers: &[VIRTUAL_KEY], vk: VIRTUAL_KEY, extended: bool) -> bool {
+fn chord(modifiers: &[VIRTUAL_KEY], vk: VIRTUAL_KEY, extended: bool) -> bool {
+    // Win 키는 확장 키보드 영역의 키다(스캔 코드 E0 5B).
+    let modifier_extended = |modifier: VIRTUAL_KEY| modifier == VK_LWIN;
     let mut inputs = Vec::with_capacity(modifiers.len() * 2 + 2);
     inputs.extend(
         modifiers
             .iter()
-            .map(|modifier| key(*modifier, false, false)),
+            .map(|modifier| key(*modifier, false, modifier_extended(*modifier))),
     );
     inputs.push(key(vk, false, extended));
     inputs.push(key(vk, true, extended));
@@ -94,7 +122,7 @@ pub fn chord(modifiers: &[VIRTUAL_KEY], vk: VIRTUAL_KEY, extended: bool) -> bool
         modifiers
             .iter()
             .rev()
-            .map(|modifier| key(*modifier, true, false)),
+            .map(|modifier| key(*modifier, true, modifier_extended(*modifier))),
     );
     send(&inputs)
 }
