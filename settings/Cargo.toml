@@ -1,6 +1,6 @@
 [package]
 name = "glide-settings"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 rust-version = "1.85"
 description = "Glide for Windows 설정 창"
@@ -25,8 +25,12 @@ serde_json = "1"
 
 [target.'cfg(windows)'.dependencies]
 # 코어 실행(ShellExecuteW). 일반 권한 설정 창이 실행해야 uiAccess 판이 서명 확인을 거쳐 시작된다.
+# 진단 정보 복사(클립보드). WebView2의 클립보드 API는 권한 확인 창을 띄울 수 있어 Win32로 직접 쓴다.
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
+    "Win32_System_Ole",
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }

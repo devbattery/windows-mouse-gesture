@@ -107,6 +107,7 @@
         </div>
       </div>
       <label class="check"><input id="auto-pause" type="checkbox" checked><span>전체 화면 게임·프레젠테이션 중에는 자동으로 멈춤<small>테두리 없는 창 모드 게임은 구분할 수 없으니 아래 예외 앱에 넣어 주세요.</small></span></label>
+      <label class="check"><input id="allow-injected" type="checkbox"><span>원격 제어로 들어온 입력에서도 제스처 사용<small>크롬 원격 데스크톱처럼 다른 PC에서 이 PC를 조작할 때 켭니다. 자동 클릭 도구가 보내는 우클릭도 제스처로 해석되니, 필요할 때만 켜 두세요.</small></span></label>
       <div class="field">
         <h3 id="excluded-title">제스처를 쓰지 않을 앱</h3>
         <p>여기 넣은 앱에서는 우클릭이 원래대로 동작합니다. 원격 데스크톱·가상 머신·그림 도구·게임에 권장합니다.</p>
@@ -116,6 +117,43 @@
           <button type="submit" class="secondary">추가</button>
         </form>
         <p id="exclude-error" class="field-error" role="status"></p>
+        <div class="suggested">
+          <h4 id="suggested-title">많이 넣는 앱</h4>
+          <ul id="suggested" class="suggested-list" aria-labelledby="suggested-title"></ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="card checkup" aria-labelledby="checkup-title">
+      <div class="checkup-head">
+        <div>
+          <h2 id="checkup-title">일상 사용 점검</h2>
+          <p>Glide가 켜진 뒤의 우클릭이 어떻게 처리됐는지 보여 줍니다. 이 PC의 메모리에만 있고, 파일로 남기거나 밖으로 보내지 않습니다.</p>
+        </div>
+        <div class="checkup-actions">
+          <button id="refresh-checkup" type="button" class="secondary">새로 고침</button>
+          <button id="copy-diagnostics" type="button" class="secondary">진단 정보 복사</button>
+        </div>
+      </div>
+      <p id="checkup-status" class="checkup-status" role="status" aria-live="polite"></p>
+      <div class="field">
+        <div>
+          <h3 id="press-title">길게 누르기 기준 추천</h3>
+          <p id="press-stats">아직 기록이 없습니다.</p>
+        </div>
+        <button id="apply-hold" type="button" class="secondary" hidden>추천값 적용</button>
+      </div>
+      <div class="field history-field">
+        <h3 id="history-title">최근 우클릭 <span id="history-counts" class="count"></span></h3>
+        <p>제스처가 원치 않게 실행되거나 우클릭이 이상한 앱이 있으면 <strong>예외에 추가</strong>를 누른 뒤 저장하세요.</p>
+        <div class="history-wrap">
+          <table class="history" aria-labelledby="history-title">
+            <thead><tr><th scope="col">시각</th><th scope="col">앱</th><th scope="col">결과</th><th scope="col"><span class="sr-only">예외</span></th></tr></thead>
+            <tbody id="history"></tbody>
+          </table>
+        </div>
+        <p id="history-empty" class="empty">아직 기록이 없습니다. 아무 앱에서나 우클릭해 보세요.</p>
+        <label class="check compact"><input id="copy-apps" type="checkbox"><span>진단 정보에 최근 앱 이름도 넣기</span></label>
       </div>
     </section>
 

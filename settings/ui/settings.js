@@ -263,6 +263,45 @@ function renderExcluded() {
     item.append(remove);
     list.append(item);
   });
+  renderSuggested();
+  renderHistory();
+}
+
+/// 예외 앱을 화면 목록에 넣는다(저장은 저장 바로). 문제가 있으면 안내 문구를 돌려준다.
+function addExclusion(raw) {
+  const name = String(raw).trim().toLowerCase();
+  // 코어와 같은 규칙: 경로가 아닌 실행 파일 이름만 받는다.
+  if (!name) return "실행 파일 이름을 적어 주세요. 예: mstsc.exe";
+  if (/[\\/]/.test(name)) return "경로 없이 실행 파일 이름만 적어 주세요. 예: mstsc.exe";
+  if (!name.endsWith(".exe")) return "실행 파일 이름은 .exe로 끝납니다. 작업 관리자의 '세부 정보' 탭에서 확인할 수 있습니다.";
+  if (settings.windows.excludedProcesses.includes(name)) return "이미 목록에 있습니다.";
+  if (settings.windows.excludedProcesses.length >= 256) return "예외 앱은 최대 256개까지 넣을 수 있습니다.";
+  settings.windows.excludedProcesses.push(name);
+  renderExcluded();
+  dirty();
+  return "";
+}
+
+let suggestedExclusions = [];
+function renderSuggested() {
+  const list = $("#suggested");
+  list.replaceChildren(...suggestedExclusions.map(({ name, reason }) => {
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    const added = settings.windows.excludedProcesses.includes(name);
+    button.disabled = added;
+    const code = document.createElement("code");
+    code.textContent = name;
+    button.append(added ? "✓ " : "+ ", code, ` · ${reason}`);
+    button.setAttribute("aria-label", added ? `${name}(${reason}) 이미 예외에 있음` : `${name}(${reason}) 예외에 추가`);
+    button.addEventListener("click", () => {
+      $("#exclude-error").textContent = addExclusion(name);
+    });
+    item.append(button);
+    return item;
+  }));
+  list.parentElement.hidden = suggestedExclusions.length === 0;
 }
 
 function render() {
@@ -272,6 +311,7 @@ function render() {
   $("#hold").value = settings.windows.holdToPassMs;
   renderHold();
   $("#auto-pause").checked = settings.windows.autoPauseFullscreen;
+  $("#allow-injected").checked = !!settings.windows.allowInjectedInput;
   renderExcluded();
   $("#rule-count").textContent = settings.rules.length ? `${settings.rules.length}개` : "";
   $("#empty").hidden = settings.rules.length !== 0;
@@ -473,26 +513,196 @@ $("#threshold").addEventListener("input", event => {
 $("#hold").addEventListener("input", event => {
   settings.windows.holdToPassMs = Number(event.target.value);
   renderHold();
+  renderPress();
   dirty();
 });
 $("#auto-pause").addEventListener("change", event => { settings.windows.autoPauseFullscreen = event.target.checked; dirty(); });
+$("#allow-injected").addEventListener("change", event => { settings.windows.allowInjectedInput = event.target.checked; dirty(); });
 $("#exclude-form").addEventListener("submit", event => {
   event.preventDefault();
   const input = $("#exclude-input");
-  const name = input.value.trim().toLowerCase();
-  let error = "";
-  // 코어와 같은 규칙: 경로가 아닌 실행 파일 이름만 받는다.
-  if (!name) error = "실행 파일 이름을 적어 주세요. 예: mstsc.exe";
-  else if (/[\\/]/.test(name)) error = "경로 없이 실행 파일 이름만 적어 주세요. 예: mstsc.exe";
-  else if (!name.endsWith(".exe")) error = "실행 파일 이름은 .exe로 끝납니다. 작업 관리자의 '세부 정보' 탭에서 확인할 수 있습니다.";
-  else if (settings.windows.excludedProcesses.includes(name)) error = "이미 목록에 있습니다.";
-  else if (settings.windows.excludedProcesses.length >= 256) error = "예외 앱은 최대 256개까지 넣을 수 있습니다.";
+  const error = addExclusion(input.value);
   $("#exclude-error").textContent = error;
-  if (error) return;
-  settings.windows.excludedProcesses.push(name);
-  input.value = "";
-  renderExcluded();
+  if (!error) input.value = "";
+});
+
+// ── 일상 사용 점검 ──
+let diagnostics;
+let historyKey = "";
+const kindText = {
+  executed: ["제스처 실행", "ok"],
+  failed: ["실행하지 못함", "warn"],
+  unmatched: ["등록되지 않은 제스처", ""],
+  notGesture: ["방향 없음", ""],
+  click: ["단순 우클릭", ""],
+  hold: ["길게 눌러 원래 우클릭", ""],
+  excluded: ["예외 앱이라 원래 우클릭", ""],
+  otherButton: ["다른 버튼과 함께 눌림", ""],
+  cancelled: ["취소됨", "warn"]
+};
+
+function checkupStatus(text, error = false) {
+  $("#checkup-status").textContent = text;
+  $("#checkup-status").dataset.error = error;
+}
+
+function entryDetail(entry) {
+  if (!entry.detail) return "";
+  if (entry.kind === "executed") return actions[entry.detail]?.label ?? entry.detail;
+  if (entry.kind === "unmatched" || entry.kind === "notGesture") return arrows(entry.detail);
+  return entry.detail;
+}
+
+function timeText(at) {
+  return new Date(at).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+function msText(value) {
+  if (value === null || value === undefined) return "기록 없음";
+  return value < 0 ? "2초 이상" : `${value}ms 이하`;
+}
+
+function renderPress() {
+  const press = diagnostics?.press;
+  const apply = $("#apply-hold");
+  if (!press) {
+    $("#press-stats").textContent = "Glide가 실행 중일 때 기록됩니다.";
+    apply.hidden = true;
+    return;
+  }
+  const parts = [
+    `제스처 시작까지 걸린 시간(95%): ${msText(press.gestureStartP95)} · ${press.gestureStartCount}회`,
+    `단순 우클릭 누름 시간(95%): ${msText(press.clickP95)} · ${press.clickCount}회`
+  ];
+  let advice;
+  if (press.recommendedHoldMs) {
+    advice = press.recommendedHoldMs === settings.windows.holdToPassMs
+      ? `지금 값(${(press.recommendedHoldMs / 1000).toFixed(2)}초)이 추천값과 같습니다.`
+      : `추천 ${(press.recommendedHoldMs / 1000).toFixed(2)}초 · 화면의 값 ${(settings.windows.holdToPassMs / 1000).toFixed(2)}초`;
+  } else {
+    advice = `제스처를 ${press.minSamples}번 이상 쓰면 추천값을 계산합니다.`;
+  }
+  $("#press-stats").textContent = `${parts.join(" / ")}. ${advice}`;
+  apply.hidden = !press.recommendedHoldMs || press.recommendedHoldMs === settings.windows.holdToPassMs;
+}
+
+function renderHistory() {
+  const history = diagnostics?.history;
+  const entries = history?.entries ?? [];
+  const counts = history?.counts ?? {};
+  const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
+  $("#history-counts").textContent = total ? `${total}회 중 실행 ${counts.executed ?? 0}회` : "";
+  $("#history-empty").hidden = entries.length !== 0;
+  $("#history-empty").textContent = diagnostics ? "아직 기록이 없습니다. 아무 앱에서나 우클릭해 보세요." : "Glide가 실행 중일 때 기록됩니다.";
+  // 같은 내용이면 다시 그리지 않는다(버튼 초점 유지). 예외 목록이 바뀌면 버튼 상태가 달라지므로 함께 비교한다.
+  const key = JSON.stringify([entries, settings?.windows.excludedProcesses]);
+  if (key === historyKey) return;
+  historyKey = key;
+  $("#history").replaceChildren(...entries.map(entry => {
+    const row = document.createElement("tr");
+    const time = row.insertCell();
+    time.className = "time";
+    time.textContent = timeText(entry.at);
+    const app = row.insertCell();
+    app.className = "app";
+    app.textContent = entry.app || "알 수 없음";
+    const result = row.insertCell();
+    const [label, tone] = kindText[entry.kind] ?? [entry.kind, ""];
+    const detail = entryDetail(entry);
+    result.textContent = detail ? `${label} · ${detail}` : label;
+    if (tone) result.dataset.tone = tone;
+    const action = row.insertCell();
+    action.className = "action";
+    if (entry.app) {
+      const name = entry.app.toLowerCase();
+      const excluded = settings.windows.excludedProcesses.includes(name);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "secondary";
+      button.textContent = excluded ? "예외에 있음" : "예외에 추가";
+      button.disabled = excluded;
+      button.setAttribute("aria-label", excluded ? `${name} 이미 예외에 있음` : `${name} 예외에 추가`);
+      button.addEventListener("click", () => {
+        const error = addExclusion(name);
+        checkupStatus(error || `${name}을(를) 예외 목록에 넣었습니다. 변경사항 저장을 눌러 적용하세요.`, !!error);
+      });
+      action.append(button);
+    }
+    return row;
+  }));
+}
+
+async function refreshCheckup() {
+  if (!coreRunning) {
+    diagnostics = undefined;
+  } else {
+    try {
+      diagnostics = await invoke("diagnostics");
+      // 이전 조회 오류 안내는 지운다.
+      if ($("#checkup-status").dataset.error === "true") checkupStatus("");
+    } catch (error) {
+      diagnostics = undefined;
+      checkupStatus(String(error), true);
+    }
+  }
+  renderPress();
+  renderHistory();
+}
+
+/// 문제를 알릴 때 붙여 넣을 진단 정보. 좌표·창 제목은 없고, 앱 이름은 사용자가 고를 때만 넣는다.
+function diagnosticsText(withApps) {
+  const s = diagnostics.system;
+  const p = diagnostics.press;
+  const counts = diagnostics.history.counts;
+  const lines = [
+    `Glide ${s.version} · ${s.os}`,
+    `관리자 권한 창 지원: ${s.uiAccess ? "켜짐" : "꺼짐"} · 실행 시간 ${Math.round(s.uptimeSeconds / 60)}분`,
+    `모니터: ${s.monitors.map(m => `${m.width}x${m.height} ${m.scalePercent}%${m.primary ? "(주)" : ""}`).join(", ") || "알 수 없음"}`,
+    `훅: 호출 ${s.hookCalls}회 · p99 ${s.hookCalls === 0 ? "기록 없음" : s.hookP99Micros === null ? "10ms 이상" : `${s.hookP99Micros}µs 미만`} · 1ms 이상 ${s.hookOver1ms}회 · 10ms 이상 ${s.hookOver10ms}회`,
+    `훅 재설치 ${s.reinstalls}회 · 초기화(잠금·절전 등) ${s.resets}회 · 버린 사건 ${s.droppedEvents}개`,
+    `설정: 제스처 ${s.ruleCount}개 · 감도 ${s.thresholdPx}px · 길게 누르기 ${s.holdMs}ms · 예외 앱 ${s.excludedCount}개 · 전체 화면 멈춤 ${s.autoPauseFullscreen ? "켬" : "끔"} · 원격 제어 입력 ${s.allowInjectedInput ? "켬" : "끔"}`,
+    `우클릭 결과: ${Object.entries(counts).map(([kind, count]) => `${kindText[kind]?.[0] ?? kind} ${count}`).join(", ")}`,
+    `누름 시간: 제스처 시작 p95 ${msText(p.gestureStartP95)}(${p.gestureStartCount}회), 단순 우클릭 p95 ${msText(p.clickP95)}(${p.clickCount}회), 추천 ${p.recommendedHoldMs ? `${p.recommendedHoldMs}ms` : `없음(제스처 ${p.minSamples}회 미만)`}`
+  ];
+  if (withApps) {
+    lines.push("최근 기록:");
+    for (const entry of diagnostics.history.entries) {
+      const detail = entryDetail(entry);
+      lines.push(`  ${timeText(entry.at)} ${entry.app || "알 수 없음"} · ${kindText[entry.kind]?.[0] ?? entry.kind}${detail ? ` · ${detail}` : ""}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+
+$("#refresh-checkup").addEventListener("click", async () => {
+  checkupStatus("");
+  await refreshCheckup();
+  if (coreRunning && diagnostics) checkupStatus("최신 기록을 불러왔습니다.");
+});
+$("#copy-diagnostics").addEventListener("click", async () => {
+  await refreshCheckup();
+  if (!diagnostics) {
+    checkupStatus("Glide가 실행 중일 때 진단 정보를 복사할 수 있습니다.", true);
+    return;
+  }
+  // WebView2의 클립보드 API는 권한 확인 창을 띄울 수 있어 Rust 쪽에서 복사한다.
+  try {
+    await invoke("copy_text", { text: diagnosticsText($("#copy-apps").checked) });
+    checkupStatus("진단 정보를 클립보드에 복사했습니다.");
+  } catch (error) {
+    checkupStatus(String(error), true);
+  }
+});
+$("#apply-hold").addEventListener("click", () => {
+  const value = diagnostics?.press?.recommendedHoldMs;
+  if (!value) return;
+  settings.windows.holdToPassMs = value;
+  $("#hold").value = value;
+  renderHold();
+  renderPress();
   dirty();
+  checkupStatus(`길게 누르기를 ${(value / 1000).toFixed(2)}초로 바꿨습니다. 변경사항 저장을 눌러 적용하세요.`);
 });
 $("#reset").addEventListener("click", () => {
   settings.rules = structuredClone(GestureKit.defaults.rules);
@@ -550,6 +760,7 @@ $("#save").addEventListener("click", async () => {
     await invoke("save", { settings: { schemaVersion: 1, enabled: settings.enabled, threshold: settings.threshold, rules, windows: settings.windows } });
     $("#save").dataset.dirty = "false";
     clearBackupStatus();
+    checkupStatus("");
     showSettingsError("");
     status("저장했습니다. 바로 적용됩니다.");
   } catch (error) {
@@ -564,6 +775,7 @@ window.addEventListener("beforeunload", event => {
 async function load() {
   const data = await invoke("load");
   applyCatalog(data.catalog);
+  suggestedExclusions = data.suggestedExclusions ?? [];
   settings = data.settings;
   renderCore(data.core);
   showSettingsError(data.settingsError);
@@ -571,10 +783,15 @@ async function load() {
   $("#save").disabled = true;
   render();
   status(coreRunning ? "" : "Glide가 꺼져 있어 설정을 보기만 할 수 있습니다.", false);
+  await refreshCheckup();
 }
 
 load().catch(error => {
   status(`설정을 읽지 못했습니다. ${error}`, true);
 });
-// 상태 칸(훅 처리 시간·실행 여부)을 주기적으로 갱신한다. 창이 가려져 있으면 쉰다.
-setInterval(() => { if (document.visibilityState === "visible" && settings) refreshStatus(); }, 3000);
+// 상태 칸(훅 처리 시간·실행 여부)과 최근 기록을 주기적으로 갱신한다. 창이 가려져 있으면 쉰다.
+setInterval(async () => {
+  if (document.visibilityState !== "visible" || !settings) return;
+  await refreshStatus();
+  await refreshCheckup();
+}, 3000);

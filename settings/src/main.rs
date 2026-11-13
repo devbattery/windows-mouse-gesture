@@ -96,6 +96,10 @@ fn load() -> Value {
         "settingsError": settings_error,
         "catalog": catalog(),
         "defaults": Settings::default().to_value(),
+        "suggestedExclusions": settings::SUGGESTED_EXCLUSIONS
+            .iter()
+            .map(|(name, reason)| json!({ "name": name, "reason": reason }))
+            .collect::<Vec<_>>(),
         "version": env!("CARGO_PKG_VERSION"),
     })
 }
@@ -104,6 +108,15 @@ fn load() -> Value {
 #[tauri::command(async)]
 fn status() -> Value {
     core_status()
+}
+
+/// 일상 사용 점검 칸: 최근 우클릭 기록, 누름 시간 통계, 진단 정보.
+#[tauri::command(async)]
+fn diagnostics() -> Result<Value, String> {
+    call_core(Request::GetDiagnostics).map_err(|error| match error {
+        CallError::NotRunning => "Glide가 실행 중이 아니라 기록을 볼 수 없습니다.".into(),
+        other => other.to_string(),
+    })
 }
 
 /// 설정 저장. 코어가 다시 검증하고 파일에 쓴 뒤 바로 반영한다.
@@ -159,6 +172,64 @@ fn shell_open(file: &str) -> bool {
 
 #[cfg(not(windows))]
 fn shell_open(_file: &str) -> bool {
+    false
+}
+
+/// 진단 정보를 클립보드에 넣는다(유니코드 텍스트).
+#[tauri::command(async)]
+fn copy_text(text: String) -> Result<(), String> {
+    // 화면이 만든 진단 문구만 받는다. 지나치게 큰 값은 거절한다.
+    if text.len() > 64 * 1024 {
+        return Err("복사할 내용이 너무 깁니다.".into());
+    }
+    if clipboard_set(&text) {
+        Ok(())
+    } else {
+        Err("클립보드를 쓰지 못했습니다. 다른 프로그램이 클립보드를 쓰고 있으면 잠시 뒤 다시 시도해 주세요.".into())
+    }
+}
+
+#[cfg(windows)]
+fn clipboard_set(text: &str) -> bool {
+    use windows_sys::Win32::Foundation::GlobalFree;
+    use windows_sys::Win32::System::DataExchange::{
+        CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData,
+    };
+    use windows_sys::Win32::System::Memory::{
+        GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalUnlock,
+    };
+    use windows_sys::Win32::System::Ole::CF_UNICODETEXT;
+
+    let wide: Vec<u16> = text.encode_utf16().chain(Some(0)).collect();
+    let bytes = wide.len() * size_of::<u16>();
+    // SAFETY: 이동 가능한 전역 메모리에 널 종료 UTF-16을 복사해 클립보드에 넘긴다.
+    // SetClipboardData가 성공하면 메모리 소유권은 시스템으로 넘어가고, 실패하면 직접 해제한다.
+    unsafe {
+        if OpenClipboard(std::ptr::null_mut()) == 0 {
+            return false;
+        }
+        let mut ok = false;
+        if EmptyClipboard() != 0 {
+            let memory = GlobalAlloc(GMEM_MOVEABLE, bytes);
+            if !memory.is_null() {
+                let target = GlobalLock(memory) as *mut u16;
+                if !target.is_null() {
+                    std::ptr::copy_nonoverlapping(wide.as_ptr(), target, wide.len());
+                    GlobalUnlock(memory);
+                    ok = !SetClipboardData(CF_UNICODETEXT as u32, memory).is_null();
+                }
+                if !ok {
+                    GlobalFree(memory);
+                }
+            }
+        }
+        CloseClipboard();
+        ok
+    }
+}
+
+#[cfg(not(windows))]
+fn clipboard_set(_text: &str) -> bool {
     false
 }
 
@@ -258,6 +329,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             load,
             status,
+            diagnostics,
+            copy_text,
             save,
             start_core,
             import_backup,

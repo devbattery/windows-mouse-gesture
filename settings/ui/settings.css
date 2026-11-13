@@ -222,4 +222,41 @@ dialog[open]{display:flex;flex-direction:column;gap:18px}
 .add-row{display:flex;gap:8px;flex-wrap:wrap}
 .add-row input{flex:1 1 220px;min-width:0;min-height:44px;padding:0 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface);font-family:ui-monospace,Consolas,monospace;font-size:13px}
 .field-error{font-size:13px;color:var(--danger)}
+/* 많이 넣는 앱(추천 예외) */
+.suggested h4{margin:4px 0 6px;font-size:13px;font-weight:650;color:var(--text-2)}
+.suggested-list{display:flex;flex-wrap:wrap;gap:8px;margin:0;padding:0;list-style:none}
+.suggested-list button{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 12px;border-radius:999px;border:1px dashed var(--border);background:none;color:var(--text);font-size:13px;cursor:pointer}
+.suggested-list button:hover:enabled{border-color:var(--accent);color:var(--accent-ink)}
+.suggested-list button:disabled{opacity:.55;cursor:default}
+.suggested-list code{font-family:ui-monospace,Consolas,monospace}
 @media (max-width:640px){.windows{padding:18px 16px}}
+
+/* 일상 사용 점검: 최근 우클릭 기록·길게 누르기 추천·진단 정보 */
+.checkup{padding:20px 24px;display:flex;flex-direction:column;gap:18px}
+.checkup h2{margin:0}
+.checkup h3{margin:0;font-size:14px}
+.checkup-head{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:flex-start}
+.checkup-head p{font-size:13px;color:var(--text-2);max-width:56ch}
+.checkup-actions{display:flex;gap:8px;flex-wrap:wrap}
+.checkup-status{font-size:13px;color:var(--accent-ink);font-weight:600}
+.checkup-status:empty{display:none}
+.checkup-status[data-error=true]{color:var(--danger)}
+.checkup .field{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.checkup .field > div{flex:1 1 320px}
+.checkup .field > div p{font-size:13px;color:var(--text-2);margin-top:4px}
+.checkup .history-field{flex-direction:column;align-items:stretch}
+.history-wrap{max-height:320px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius-sm)}
+.history-wrap:has(tbody:empty){display:none}
+.history{width:100%;border-collapse:collapse;font-size:13px}
+.history th{position:sticky;top:0;background:var(--surface-2);text-align:left;font-weight:650;padding:8px 12px;border-bottom:1px solid var(--border)}
+.history td{padding:6px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+.history tr:last-child td{border-bottom:0}
+.history td.time{color:var(--text-2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.history td.app{font-family:ui-monospace,Consolas,monospace;word-break:break-all}
+.history td[data-tone=warn]{color:var(--warn)}
+.history td[data-tone=ok]{color:var(--ok)}
+.history td.action{text-align:right;white-space:nowrap}
+.history td.action button{min-height:32px;padding:0 10px;font-size:12px}
+.checkup .history-field .empty{border:0;padding:0}
+.check.compact{font-size:13px;color:var(--text-2)}
+@media (max-width:640px){.checkup{padding:18px 16px}.history td,.history th{padding:6px 8px}}
