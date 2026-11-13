@@ -124,7 +124,8 @@ function Install-Files {
         Invoke-Step '설치 정보 기록(install.json)' {
             [ordered]@{
                 # 실행 파일에는 버전 자원이 없어 패키지가 기록한 버전을 쓴다.
-                version = (Get-Content -LiteralPath (Join-Path $Package 'version.txt') -ErrorAction SilentlyContinue | Select-Object -First 1)
+                # Get-Content 결과에는 경로 등 부가 속성이 붙어 JSON에 객체로 들어가므로 문자열로 바꾼다.
+                version = [string](Get-Content -LiteralPath (Join-Path $Package 'version.txt') -ErrorAction SilentlyContinue | Select-Object -First 1)
                 uiAccess = $useUiAccess
                 certificateThumbprint = $newThumbprint
                 installedAt = (Get-Date).ToString('o')
