@@ -71,6 +71,7 @@ pub fn collect() -> Value {
             "thresholdPx": settings.threshold,
             "holdMs": settings.hold_ms,
             "autoPauseFullscreen": settings.auto_pause_fullscreen,
+            "checkUpdates": settings.check_updates,
         },
     })
 }

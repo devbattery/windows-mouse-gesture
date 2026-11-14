@@ -13,6 +13,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use glide_core::actions::{Hud, Tone, gesture_hud};
 use glide_core::gesture::Sequence;
 use glide_core::ipc;
+use glide_core::update::{Version, release_url};
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows_sys::Win32::System::Com::{
     COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoUninitialize,
@@ -21,7 +22,7 @@ use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::System::RemoteDesktop::{
     NOTIFY_FOR_THIS_SESSION, WTSRegisterSessionNotification, WTSUnRegisterSessionNotification,
 };
-use windows_sys::Win32::UI::Shell::{NIN_SELECT, NINF_KEY};
+use windows_sys::Win32::UI::Shell::{NIN_BALLOONUSERCLICK, NIN_SELECT, NINF_KEY};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu, DestroyWindow,
     DispatchMessageW, GetCursorPos, GetMessageW, KillTimer, MF_CHECKED, MF_GRAYED, MF_SEPARATOR,
@@ -37,7 +38,7 @@ use super::shared::{
     UI_ACCESS, UI_WINDOW, WM_HOOK_RESET, WM_UI_EXIT, WM_UI_TRAY, WM_UI_WAKE,
 };
 use super::tray::Tray;
-use super::{hook, launch, log};
+use super::{hook, launch, log, update};
 
 /// 훅·워커 → UI 스레드 사건.
 #[derive(Clone, Debug)]
@@ -72,6 +73,10 @@ pub enum UiEvent {
     },
     /// 사용 여부·전체 화면 일시 중지가 바뀜(트레이 도움말 갱신)
     StateChanged,
+    /// 새 버전이 있음(트레이 알림, 버전마다 한 번)
+    UpdateAvailable {
+        version: Version,
+    },
 }
 
 /// 실행된 제스처 안내 표시 시간(확장과 같음)
@@ -84,6 +89,7 @@ const MENU_TOGGLE: usize = 1;
 const MENU_OPEN_SETTINGS: usize = 2;
 const MENU_OPEN_FOLDER: usize = 3;
 const MENU_EXIT: usize = 4;
+const MENU_UPDATE: usize = 5;
 
 static WAKE_PENDING: AtomicBool = AtomicBool::new(false);
 /// Explorer 재시작 알림 메시지 번호
@@ -110,6 +116,8 @@ struct Ui {
     settings_folder: PathBuf,
     /// 손을 뗀 뒤 결과를 보여 주는 중(실패 안내를 덧붙일 수 있음)
     showing_result: bool,
+    /// 마지막으로 띄운 트레이 알림이 새 버전 알림인지(알림을 누르면 Release 페이지를 연다)
+    update_balloon: bool,
 }
 
 thread_local! {
@@ -206,6 +214,7 @@ pub fn run(
             settings_file,
             settings_folder,
             showing_result: false,
+            update_balloon: false,
         })
     });
     UI_WINDOW.store(window as isize, Ordering::Release);
@@ -258,6 +267,10 @@ unsafe extern "system" fn control_proc(
             // 오른쪽 클릭(WM_CONTEXTMENU), 왼쪽 클릭(NIN_SELECT), 키보드 선택(NIN_KEYSELECT = NIN_SELECT | NINF_KEY)
             if event == WM_CONTEXTMENU || event == NIN_SELECT || event == (NIN_SELECT | NINF_KEY) {
                 show_menu(window);
+            } else if event == NIN_BALLOONUSERCLICK && with_ui(|ui| ui.update_balloon) == Some(true)
+            {
+                // 새 버전 알림을 누름(설정 파일 오류 알림은 누르는 동작이 없다)
+                open_release_page();
             }
             0
         }
@@ -308,7 +321,16 @@ impl Ui {
     fn on_event(&mut self, event: UiEvent) {
         match &event {
             UiEvent::SettingsError { message } => {
+                self.update_balloon = false;
                 self.tray.warn("Glide 설정 파일 오류", message);
+                return;
+            }
+            UiEvent::UpdateAvailable { version } => {
+                self.update_balloon = true;
+                self.tray.info(
+                    &format!("Glide 새 버전 {version}"),
+                    "이 알림이나 트레이 메뉴의 \"새 버전 받기\"를 누르면 Release 페이지가 열립니다.",
+                );
                 return;
             }
             UiEvent::StateChanged => {
@@ -375,7 +397,9 @@ impl Ui {
                     unsafe { SetTimer(self.window, HIDE_TIMER, NOTICE_MS, None) };
                 }
             }
-            UiEvent::SettingsError { .. } | UiEvent::StateChanged => {}
+            UiEvent::SettingsError { .. }
+            | UiEvent::StateChanged
+            | UiEvent::UpdateAvailable { .. } => {}
         }
     }
 
@@ -435,6 +459,7 @@ fn show_menu(window: HWND) {
         "관리자 권한 창: 지원 안 함(설치판에서 지원)"
     };
     let enabled = RUNTIME_ENABLED.load(Ordering::Relaxed);
+    let update_item = update::available().map(|version| format!("새 버전 받기 ({version})"));
     // SAFETY: 메뉴를 만들어 띄우고 바로 해제한다. 메뉴 전에 창을 전면으로 두어야 바깥을 누르면 닫힌다.
     let command = unsafe {
         let menu = CreatePopupMenu();
@@ -451,6 +476,9 @@ fn show_menu(window: HWND) {
         );
         item(MF_STRING, MENU_OPEN_SETTINGS, "설정 열기");
         item(MF_STRING, MENU_OPEN_FOLDER, "설정 폴더 열기");
+        if let Some(text) = &update_item {
+            item(MF_STRING, MENU_UPDATE, text);
+        }
         AppendMenuW(menu, MF_SEPARATOR, 0, null());
         item(MF_STRING | MF_GRAYED, 0, &status);
         item(MF_STRING | MF_GRAYED, 0, admin_line);
@@ -486,11 +514,22 @@ fn show_menu(window: HWND) {
                 log::warn(|| "[트레이] 설정 폴더를 열지 못했습니다".into());
             }
         }
+        MENU_UPDATE => open_release_page(),
         MENU_EXIT => {
             // SAFETY: 이 스레드의 메시지 루프를 끝낸다.
             unsafe { PostQuitMessage(0) };
         }
         _ => {}
+    }
+}
+
+/// 확인된 새 버전의 Release 페이지를 기본 브라우저로 연다. 주소는 검증한 버전 숫자로만 만든다.
+/// explorer를 통해 열므로 브라우저가 코어의 uiAccess 권한을 물려받지 않는다(`launch.rs`).
+fn open_release_page() {
+    if let Some(version) = update::available()
+        && !launch::open(&release_url(version), None)
+    {
+        log::warn(|| "[트레이] Release 페이지를 열지 못했습니다".into());
     }
 }
 

@@ -3,6 +3,22 @@
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)을 씁니다.
 릴리스 작업(`.github/workflows/release.yml`)이 해당 버전 절을 GitHub Release 노트로 씁니다.
 
+## [0.5.4] - 2026-11-14
+
+### 추가
+
+- **새 버전 알림**: 하루 한 번 GitHub Releases에 최신 버전 번호를 묻고, 새 버전이 있으면 트레이 알림(버전마다 한 번)과
+  트레이 메뉴 "새 버전 받기", 설정 창 정보 칸에 알립니다. 누르면 Release 페이지가 열리고, 받기·설치는 직접 합니다.
+  - 기본 켜짐이며 설정 창 **Glide 정보 → 새 버전 자동 확인**(`windows.checkUpdates`)으로 끌 수 있습니다.
+  - 보내는 것은 HTTPS GET 요청과 User-Agent뿐이고, 응답에서는 버전 번호만 읽습니다. 여는 주소는 그 번호로 직접 만듭니다.
+  - Windows 내장 WinHTTP를 써서 새 라이브러리가 늘지 않았습니다.
+- `glide-core.exe --check-update`: 지금 바로 새 버전을 확인합니다(진단용).
+
+### 바뀜
+
+- "네트워크 통신 없음"이 "새 버전 확인 외 통신 없음"으로 바뀌었습니다(README 개인정보, SECURITY.md, 설정 창 문구).
+- 진단 정보에 새 버전 확인 켬·끔을 넣었습니다.
+
 ## [0.5.3] - 2026-11-14
 
 ### 바뀜
@@ -95,6 +111,7 @@
 
 - 전역 마우스 훅과 제스처 인식(크롬 확장 Glide와 같은 규칙), 단순 우클릭 다시 보내기, 길게 누르기 통과.
 
+[0.5.4]: https://github.com/devbattery/windows-mouse-gesture/releases/tag/v0.5.4
 [0.5.3]: https://github.com/devbattery/windows-mouse-gesture/releases/tag/v0.5.3
 [0.5.2]: https://github.com/devbattery/windows-mouse-gesture/releases/tag/v0.5.2
 [0.5.1]: https://github.com/devbattery/windows-mouse-gesture/releases/tag/v0.5.1

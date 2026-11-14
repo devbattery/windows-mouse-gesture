@@ -312,6 +312,8 @@ function render() {
   renderHold();
   $("#auto-pause").checked = settings.windows.autoPauseFullscreen;
   $("#allow-injected").checked = !!settings.windows.allowInjectedInput;
+  // 이전 코어가 보낸 설정에는 값이 없을 수 있다. 없으면 기본값(켜짐)으로 본다.
+  $("#check-updates").checked = settings.windows.checkUpdates !== false;
   renderExcluded();
   $("#rule-count").textContent = settings.rules.length ? `${settings.rules.length}개` : "";
   $("#empty").hidden = settings.rules.length !== 0;
@@ -365,10 +367,15 @@ function renderCore(core) {
       !s.runtimeEnabled ? "트레이에서 잠시 꺼 둠" : s.fullscreenPaused ? "전체 화면이라 일시 중지" : "설정에서 꺼 둠";
     $("#core-detail").textContent = `Glide ${s.version} · 알림 영역(트레이)에서 실행 중`;
     facts.push(s.uiAccess ? ["관리자 권한 창 지원: 켜짐", "ok"] : ["관리자 권한 창 지원: 꺼짐", "warn"]);
+    // 코어가 확인한 새 버전(지금보다 새 버전일 때만 값이 있다). 받기는 "새 버전 확인" 버튼으로 연다.
+    const latest = s.update?.latest;
+    $("#about-update").hidden = !latest;
+    $("#about-update").textContent = latest ? `새 버전 ${latest}이(가) 있습니다. "새 버전 확인"을 눌러 받아 주세요.` : "";
     const p99 = s.hookCalls === 0 ? "기록 없음" : s.hookOver10ms ? "10ms 이상" : `${s.hookP99Micros}µs 미만`;
     facts.push([`훅 처리 시간 p99: ${p99}`, s.hookOver10ms ? "warn" : ""]);
     if (s.reinstalls) facts.push([`훅 재설치 ${s.reinstalls}회`, ""]);
   } else {
+    $("#about-update").hidden = true;
     $("#core-title").textContent = "Glide가 실행 중이 아닙니다";
     $("#core-detail").textContent = core.error || "제스처를 쓰려면 Glide를 시작하세요. 설정은 Glide가 실행 중일 때 저장할 수 있습니다.";
   }
@@ -518,6 +525,7 @@ $("#hold").addEventListener("input", event => {
 });
 $("#auto-pause").addEventListener("change", event => { settings.windows.autoPauseFullscreen = event.target.checked; dirty(); });
 $("#allow-injected").addEventListener("change", event => { settings.windows.allowInjectedInput = event.target.checked; dirty(); });
+$("#check-updates").addEventListener("change", event => { settings.windows.checkUpdates = event.target.checked; dirty(); });
 $("#exclude-form").addEventListener("submit", event => {
   event.preventDefault();
   const input = $("#exclude-input");
@@ -660,7 +668,7 @@ function diagnosticsText(withApps) {
     `모니터: ${s.monitors.map(m => `${m.width}x${m.height} ${m.scalePercent}%${m.primary ? "(주)" : ""}`).join(", ") || "알 수 없음"}`,
     `훅: 호출 ${s.hookCalls}회 · p99 ${s.hookCalls === 0 ? "기록 없음" : s.hookP99Micros === null ? "10ms 이상" : `${s.hookP99Micros}µs 미만`} · 1ms 이상 ${s.hookOver1ms}회 · 10ms 이상 ${s.hookOver10ms}회`,
     `훅 재설치 ${s.reinstalls}회 · 초기화(잠금·절전 등) ${s.resets}회 · 버린 사건 ${s.droppedEvents}개`,
-    `설정: 제스처 ${s.ruleCount}개 · 감도 ${s.thresholdPx}px · 길게 누르기 ${s.holdMs}ms · 예외 앱 ${s.excludedCount}개 · 전체 화면 멈춤 ${s.autoPauseFullscreen ? "켬" : "끔"} · 원격 제어 입력 ${s.allowInjectedInput ? "켬" : "끔"}`,
+    `설정: 제스처 ${s.ruleCount}개 · 감도 ${s.thresholdPx}px · 길게 누르기 ${s.holdMs}ms · 예외 앱 ${s.excludedCount}개 · 전체 화면 멈춤 ${s.autoPauseFullscreen ? "켬" : "끔"} · 원격 제어 입력 ${s.allowInjectedInput ? "켬" : "끔"} · 새 버전 확인 ${s.checkUpdates === false ? "끔" : "켬"}`,
     `우클릭 결과: ${Object.entries(counts).map(([kind, count]) => `${kindText[kind]?.[0] ?? kind} ${count}`).join(", ")}`,
     `누름 시간: 제스처 시작 p95 ${msText(p.gestureStartP95)}(${p.gestureStartCount}회), 단순 우클릭 p95 ${msText(p.clickP95)}(${p.clickCount}회), 추천 ${p.recommendedHoldMs ? `${p.recommendedHoldMs}ms` : `없음(제스처 ${p.minSamples}회 미만)`}`
   ];

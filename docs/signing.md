@@ -56,4 +56,7 @@ SignPath 프로젝트에도 설정할 것이 있습니다.
 
 - Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
 - 커밋·리뷰·승인 담당: 저장소 소유자 [devbattery](https://github.com/devbattery). 릴리스 서명 요청은 저장소 소유자가 승인합니다.
-- 개인정보: 이 프로그램은 사용자가 따로 요청하지 않는 한 어떤 정보도 다른 네트워크 시스템으로 보내지 않습니다(네트워크 통신 기능 없음).
+- 개인정보: 이 프로그램은 새 버전 확인 말고는 어떤 정보도 다른 네트워크 시스템으로 보내지 않습니다.
+  새 버전 확인은 하루 한 번 GitHub Releases API(`api.github.com`)에 최신 버전 번호를 묻는 HTTPS 요청이며,
+  앱 이름·버전(User-Agent) 외의 정보는 보내지 않습니다. 설정 창에서 끌 수 있습니다(기본 켜짐).
+  신청할 때 SignPath에 이 동작을 알리고, 기본값이 정책상 문제 되면 기본 꺼짐으로 바꿉니다.

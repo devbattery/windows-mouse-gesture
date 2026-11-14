@@ -160,7 +160,8 @@
     <section class="card about" aria-labelledby="about-title">
       <div>
         <h2 id="about-title">Glide 정보</h2>
-        <p><strong id="about-version">Glide</strong> · MIT 라이선스 · <span>새 버전은 GitHub Releases에서 확인합니다. 버튼을 누르면 브라우저로 열며, Glide가 직접 인터넷에 접속하지는 않습니다.</span></p>
+        <p><strong id="about-version">Glide</strong> · MIT 라이선스 · <span>새 버전은 GitHub Releases에 올라옵니다. 받기와 설치는 Release 페이지의 zip으로 합니다.</span></p>
+        <p id="about-update" class="about-update" role="status" aria-live="polite" hidden></p>
         <p id="about-status" class="about-status" role="status" aria-live="polite" hidden></p>
       </div>
       <div class="about-actions">
@@ -168,6 +169,7 @@
         <button type="button" class="secondary" data-info="license">라이선스</button>
         <button type="button" class="secondary" data-info="notices">오픈소스 고지</button>
       </div>
+      <label class="check about-check"><input id="check-updates" type="checkbox" checked><span>새 버전 자동 확인<small>하루 한 번 GitHub에 최신 버전 번호만 물어보고, 새 버전이 있으면 트레이 알림으로 알려 줍니다. 보내는 개인정보는 없지만 GitHub에는 이 PC의 IP 주소가 보입니다. 끄면 Glide는 인터넷에 접속하지 않습니다.</small></span></label>
     </section>
 
     <section class="tips" aria-labelledby="tips-title">
@@ -185,7 +187,7 @@
         <button id="reset" type="button" class="text-button">기본 제스처로 되돌리기</button>
         <button id="save" type="button" class="primary" disabled>변경사항 저장</button>
       </div>
-      <p class="privacy">기록 수집 없이 · 외부 통신 없이 · 이 PC에만 저장</p>
+      <p class="privacy">기록 수집 없이 · 새 버전 확인 외 통신 없이 · 이 PC에만 저장</p>
     </footer>
   </main>
 

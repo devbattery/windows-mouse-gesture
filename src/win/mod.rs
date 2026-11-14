@@ -5,6 +5,7 @@
 //! - 훅: 저수준 마우스 훅, 판단만 하고 반환(`hook.rs`)
 //! - 워커: 입력 재전송·동작 실행·설정 감시·예외 판정·설정 저장(`worker.rs`)
 //! - 파이프: 설정 창 요청 처리(`pipe.rs`)
+//! - 새 버전 확인: 하루 한 번 GitHub Releases에 최신 버전만 물음(`update.rs`, 설정으로 끌 수 있음)
 //! - 로그: `--console`일 때만 출력(`log.rs`)
 
 mod clock;
@@ -20,6 +21,7 @@ mod settings_store;
 mod shared;
 mod tray;
 mod ui;
+mod update;
 mod worker;
 
 use std::ptr::null;
@@ -54,6 +56,7 @@ const USAGE: &str = "\
 
   --console        진단 로그와 훅 처리 시간 통계를 콘솔에 출력합니다
   --demo-overlay   견본 제스처(←)로 궤적·안내 표시를 그려 보고 종료합니다(진단용)
+  --check-update   GitHub에서 새 버전을 한 번 확인해 결과를 보여 주고 끝납니다(진단용)
   -h, --help       이 도움말
 
 설정은 %APPDATA%\\Glide\\settings.json에서 바꿉니다(저장하면 1초 안에 반영).
@@ -62,17 +65,20 @@ const USAGE: &str = "\
 struct Options {
     console: bool,
     demo_overlay: bool,
+    check_update: bool,
 }
 
 fn parse_args(args: impl Iterator<Item = String>) -> Result<Option<Options>, String> {
     let mut options = Options {
         console: false,
         demo_overlay: false,
+        check_update: false,
     };
     for arg in args {
         match arg.as_str() {
             "--console" => options.console = true,
             "--demo-overlay" => options.demo_overlay = true,
+            "--check-update" => options.check_update = true,
             "-h" | "--help" => return Ok(None),
             other => return Err(format!("알 수 없는 옵션입니다: {other}")),
         }
@@ -155,6 +161,17 @@ pub fn run() -> i32 {
             return 2;
         }
     };
+    // 진단: 새 버전 확인만 하고 끝낸다. 실행 중인 Glide와 겹쳐도 되도록 단일 실행 확인보다 먼저 처리한다.
+    if options.check_update {
+        let (ok, report) = update::check_report();
+        // SAFETY: 부모 콘솔에 붙어 보거나, 없으면 메시지 상자를 쓴다.
+        if unsafe { AttachConsole(ATTACH_PARENT_PROCESS) } != 0 {
+            println!("{report}");
+        } else {
+            message_box(&report);
+        }
+        return if ok { 0 } else { 1 };
+    }
     if options.console {
         // SAFETY: 부모(터미널) 콘솔에 붙고, 없으면 새 콘솔을 만든다.
         unsafe {
@@ -248,6 +265,7 @@ pub fn run() -> i32 {
 
     let worker_ui = ui_tx.clone();
     let demo_ui = options.demo_overlay.then(|| ui_tx.clone());
+    update::start(ui_tx.clone());
     let pipe_events = event_tx.clone();
     let shutdown = event_tx.clone();
     let settings_path = store.path().display().to_string();
@@ -351,6 +369,10 @@ fn respond(request: Request, events: &SyncSender<worker::Event>, settings_path: 
                 "hookOver10ms": snapshot.count() > 0 && p99.is_none(),
                 "reinstalls": hook::REINSTALLS.load(Ordering::Relaxed),
                 "settingsPath": settings_path,
+                // 새 버전 확인 결과(지금보다 새 버전이 있을 때만 값이 있다)
+                "update": {
+                    "latest": update::available().map(|version| version.to_string()),
+                },
             }))
         }
         Request::GetDiagnostics => ipc::success(diagnostics::collect()),
@@ -429,6 +451,7 @@ mod tests {
     fn console_flag_and_help() {
         assert!(!parse(&[]).unwrap().unwrap().console);
         assert!(parse(&["--console"]).unwrap().unwrap().console);
+        assert!(parse(&["--check-update"]).unwrap().unwrap().check_update);
         assert!(parse(&["--help"]).unwrap().is_none());
         assert!(parse(&["--threshold", "30"]).is_err());
     }

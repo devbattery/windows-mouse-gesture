@@ -63,7 +63,11 @@
 | `-SkipSmartAppControlCheck` | 스마트 앱 컨트롤 확인을 건너뜀(판단이 틀렸다고 확신할 때만) |
 
 **업데이트:** 새 버전 zip을 받아 같은 방법으로 설치하면 덮어씁니다. 설정(`%APPDATA%\Glide`)은 그대로입니다.
-Glide는 네트워크 통신을 하지 않으므로 새 버전을 스스로 확인하지 않습니다.
+0.5.4부터 Glide가 하루 한 번 GitHub에 최신 버전 번호를 물어보고, 새 버전이 있으면 트레이 알림을 띄웁니다
+(버전마다 한 번). 알림이나 트레이 메뉴의 **새 버전 받기**를 누르면 Release 페이지가 열립니다. 받기와 설치는
+직접 합니다. 서명 전이라 앱이 스스로 내려받아 설치하지는 않습니다.
+설정 창 **Glide 정보 → 새 버전 자동 확인**에서 끌 수 있고, 끄면 Glide는 인터넷에 접속하지 않습니다.
+`glide-core.exe --check-update`로 지금 바로 확인할 수도 있습니다.
 
 **제거:** "설정 → 앱 → 설치된 앱 → Glide for Windows → 제거"를 누르거나, 설치 폴더 또는 압축을 푼 폴더의
 `uninstall.cmd`를 실행합니다. 다음을 지웁니다.
@@ -172,7 +176,8 @@ cargo build --release --workspace
     "holdToPassMs": 400,
     "excludedProcesses": ["mstsc.exe"],
     "autoPauseFullscreen": true,
-    "allowInjectedInput": false
+    "allowInjectedInput": false,
+    "checkUpdates": true
   }
 }
 ```
@@ -182,6 +187,7 @@ cargo build --release --workspace
 - `excludedProcesses`: 제스처를 쓰지 않을 앱의 실행 파일 이름(경로 없이).
 - `allowInjectedInput`: 다른 프로그램이 주입한 마우스 입력(원격 제어 프로그램 등)도 제스처로 해석합니다. 기본은 꺼짐입니다.
   켜면 자동 클릭 도구가 보내는 우클릭도 지연·변환될 수 있습니다.
+- `checkUpdates`: 하루 한 번 GitHub에 새 버전을 확인합니다. 기본은 켜짐이고, 값이 없는 이전 설정 파일도 켜짐으로 읽습니다([개인정보](#개인정보)).
 - `keyboard` 동작의 `shortcut`은 확장과 같은 표기(`Ctrl+T`, `Alt+Left`, `Shift+F5`, `Cmd+D` 등)이며, `Cmd`는 Win 키로 보냅니다.
 
 ### 동작 목록
@@ -239,6 +245,8 @@ node tools/make-icon.cjs                                      # settings/icons/i
 - [ ] `C:\Program Files\Glide\glide-core.exe` 속성 → 자세히에 "Glide for Windows"와 버전이 보임
 - [ ] 설정 → 앱 → 설치된 앱에 "Glide for Windows"(버전·게시자 devbattery)가 보임
 - [ ] 설정 창 **Glide 정보**: 버전이 맞고, "새 버전 확인"은 브라우저로 Releases를, "라이선스"·"오픈소스 고지"는 메모장으로 파일을 엶
+- [ ] 새 버전 알림(0.5.4 이후 버전이 나왔을 때): Glide 시작 2분쯤 뒤 트레이 알림이 한 번 뜨고, 알림·트레이 메뉴 "새 버전 받기"가
+      Release 페이지를 엶. 설정 창 정보 칸에 "새 버전 x.y.z가 있습니다"가 보임. "새 버전 자동 확인"을 끄고 저장하면 다시 묻지 않음
 - [ ] (선택) 소스에서 빌드: `git clone` → `tools\package.ps1` → `install.cmd`
 
 **1. 우클릭 호환(M1 게이트)**
@@ -348,7 +356,12 @@ docs/signing.md 코드 서명 현황과 SignPath 계획
 
 ## 개인정보
 
-- 네트워크 통신을 하지 않습니다. 설정 창도 CSP로 외부 연결을 막습니다.
+- 네트워크 통신은 **새 버전 확인** 하나뿐입니다(기본 켜짐, 설정 창에서 끌 수 있음).
+  - 하루 한 번 `https://api.github.com/repos/devbattery/windows-mouse-gesture/releases/latest`에 GET 요청을 보냅니다.
+  - 보내는 것은 일반 HTTPS 요청과 User-Agent(`Glide-for-Windows/<버전>`)뿐이고, 설정·사용 기록·개인정보는 보내지 않습니다.
+    GitHub에는 요청한 PC의 IP 주소가 보입니다.
+  - 응답에서는 버전 번호만 읽고, 결과는 메모리에만 둡니다. 앱이 파일을 내려받거나 설치하지 않습니다.
+- 설정 창(WebView)은 CSP로 외부 연결을 막습니다. 버튼으로 여는 Release 페이지는 기본 브라우저가 엽니다.
 - 키보드 훅을 설치하지 않습니다. Esc는 제스처 중에만 키 상태를 조회합니다.
 - 로그는 `--console`일 때 콘솔에만 출력하고 파일로 남기지 않습니다. 창 제목은 읽지 않고, 실행 파일 이름만 다룹니다.
 - 일상 사용 점검의 최근 기록·누름 시간 통계는 메모리에만 있고 Glide를 끄면 사라집니다. 좌표와 창 제목은 기록하지 않습니다.

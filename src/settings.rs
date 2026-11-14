@@ -55,6 +55,8 @@ pub struct Settings {
     pub auto_pause_fullscreen: bool,
     /// 다른 프로그램이 주입한 입력(원격 제어 프로그램 등)도 제스처로 해석
     pub allow_injected_input: bool,
+    /// 하루 한 번 GitHub Releases에 최신 버전을 물어보고 새 버전이 있으면 알림
+    pub check_updates: bool,
 }
 
 /// 확장의 기본 제스처 10종(`shared.js` defaults.rules)과 같다.
@@ -88,6 +90,7 @@ impl Default for Settings {
             excluded_processes: Vec::new(),
             auto_pause_fullscreen: true,
             allow_injected_input: false,
+            check_updates: true,
         }
     }
 }
@@ -247,6 +250,12 @@ pub fn validate(value: &Value) -> Result<Settings, String> {
         Some(Value::Bool(value)) => *value,
         Some(_) => return Err("allowInjectedInput은 true 또는 false여야 합니다.".into()),
     };
+    // 이 항목이 없던 이전 설정 파일은 기본값(켜짐)으로 읽는다.
+    let check_updates = match windows.get("checkUpdates") {
+        None | Some(Value::Null) => defaults.check_updates,
+        Some(Value::Bool(value)) => *value,
+        Some(_) => return Err("checkUpdates는 true 또는 false여야 합니다.".into()),
+    };
     Ok(Settings {
         enabled,
         threshold: threshold as u32,
@@ -255,6 +264,7 @@ pub fn validate(value: &Value) -> Result<Settings, String> {
         excluded_processes,
         auto_pause_fullscreen,
         allow_injected_input,
+        check_updates,
     })
 }
 
@@ -272,6 +282,7 @@ impl Settings {
                 "excludedProcesses": self.excluded_processes,
                 "autoPauseFullscreen": self.auto_pause_fullscreen,
                 "allowInjectedInput": self.allow_injected_input,
+                "checkUpdates": self.check_updates,
             }
         })
     }
@@ -383,6 +394,13 @@ mod tests {
             ))
             .is_err()
         );
+        // 새 버전 확인은 기본 켜짐(값이 없는 이전 파일 포함)이고, 끄면 저장·읽기에서 유지된다
+        assert!(ok.check_updates);
+        let no_updates =
+            parse(&format!(r#"{{{base},"windows":{{"checkUpdates":false}}}}"#)).unwrap();
+        assert!(!no_updates.check_updates);
+        assert_eq!(parse(&no_updates.to_json()).unwrap(), no_updates);
+        assert!(parse(&format!(r#"{{{base},"windows":{{"checkUpdates":"no"}}}}"#)).is_err());
         assert!(parse(&format!(r#"{{{base},"windows":{{"holdToPassMs":50}}}}"#)).is_err());
         assert!(
             parse(&format!(

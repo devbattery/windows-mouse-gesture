@@ -1,6 +1,6 @@
 [package]
 name = "glide-settings"
-version = "0.5.3"
+version = "0.5.4"
 edition = "2024"
 rust-version = "1.85"
 description = "Glide for Windows 설정 창"

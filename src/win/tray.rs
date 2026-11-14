@@ -5,8 +5,9 @@
 
 use windows_sys::Win32::Foundation::HWND;
 use windows_sys::Win32::UI::Shell::{
-    NIF_ICON, NIF_INFO, NIF_MESSAGE, NIF_SHOWTIP, NIF_TIP, NIIF_WARNING, NIM_ADD, NIM_DELETE,
-    NIM_MODIFY, NIM_SETVERSION, NOTIFYICON_VERSION_4, NOTIFYICONDATAW, Shell_NotifyIconW,
+    NIF_ICON, NIF_INFO, NIF_MESSAGE, NIF_SHOWTIP, NIF_TIP, NIIF_INFO, NIIF_WARNING, NIM_ADD,
+    NIM_DELETE, NIM_MODIFY, NIM_SETVERSION, NOTIFYICON_VERSION_4, NOTIFYICONDATAW,
+    Shell_NotifyIconW,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateIconFromResourceEx, DestroyIcon, GetSystemMetrics, HICON, IDI_APPLICATION,
@@ -109,12 +110,21 @@ impl Tray {
 
     /// 경고 알림(설정 파일 오류 등).
     pub fn warn(&self, title: &str, text: &str) {
+        self.notify(title, text, NIIF_WARNING);
+    }
+
+    /// 정보 알림(새 버전 등). 사용자가 알림을 누르면 `NIN_BALLOONUSERCLICK`이 온다.
+    pub fn info(&self, title: &str, text: &str) {
+        self.notify(title, text, NIIF_INFO);
+    }
+
+    fn notify(&self, title: &str, text: &str, icon: u32) {
         if !self.added {
             return;
         }
         let mut data = self.data();
         data.uFlags = NIF_INFO;
-        data.dwInfoFlags = NIIF_WARNING;
+        data.dwInfoFlags = icon;
         copy_into(&mut data.szInfoTitle, title);
         copy_into(&mut data.szInfo, text);
         // SAFETY: 등록한 아이콘에 알림을 띄운다.

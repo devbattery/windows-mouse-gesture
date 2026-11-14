@@ -131,6 +131,8 @@ output{min-width:52px;text-align:right;font-weight:650;color:var(--text);font-va
 .about p{margin-top:2px}
 .about strong{color:var(--text);font-weight:650}
 .about .about-status{color:var(--danger);font-weight:600}
+.about .about-update{color:var(--accent-ink);font-weight:650}
+.about-check{flex-basis:100%;padding-top:12px;border-top:1px solid var(--border)}
 .about-actions{display:flex;gap:8px;flex-wrap:wrap}
 
 /* 도움말 */
