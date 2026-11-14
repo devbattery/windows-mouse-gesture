@@ -22,6 +22,8 @@
   로그인할 때 자동으로 시작하지 않는다.
 .PARAMETER DryRun
   아무것도 바꾸지 않고 할 일만 출력한다.
+.PARAMETER SkipSmartAppControlCheck
+  스마트 앱 컨트롤이 켜져 있다고 판단돼도 설치를 계속한다(판단이 틀렸다고 확신할 때만).
 
 .EXAMPLE
   install.cmd
@@ -33,6 +35,7 @@ param(
     [switch] $NoUiAccess,
     [switch] $NoAutoStart,
     [switch] $DryRun,
+    [switch] $SkipSmartAppControlCheck,
     # 내부용: 관리자 단계로 다시 실행될 때만 쓴다.
     [ValidateSet('user', 'admin')] [string] $Stage = 'user',
     [string] $LogPath
@@ -85,6 +88,25 @@ function Remove-GlideRootCertificate([string] $Thumbprint) {
     }
 }
 
+# 이 프로젝트의 정식 서명(SignPath Foundation, docs/signing.md)인지 확인한다.
+# 'Valid'는 서명이 손상되지 않았고 인증서가 이 PC의 신뢰 루트로 이어진다는 뜻이다. 다른 서명자는 정식 서명으로 보지 않는다.
+function Test-PublisherSigned([string] $Path) {
+    $signature = Get-AuthenticodeSignature -LiteralPath $Path
+    $signature.Status -eq 'Valid' -and $signature.SignerCertificate.Subject -like '*SignPath Foundation*'
+}
+
+# 스마트 앱 컨트롤(Windows 11)이 차단 모드인지. 차단 모드에서는 Microsoft 신뢰 루트 프로그램의 인증서로
+# 서명했거나 Microsoft 평판이 있는 앱만 실행되고, 설치 때 만드는 이 PC 전용 인증서는 인정되지 않는다.
+# 값: 0 끔, 1 켬(차단), 2 평가 모드(차단하지 않음). Windows 10처럼 값이 없거나 읽지 못하면 꺼진 것으로 본다.
+function Test-SmartAppControlEnforced {
+    try {
+        $policy = Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy' -Name 'VerifiedAndReputablePolicyState' -ErrorAction Stop
+        return $policy.VerifiedAndReputablePolicyState -eq 1
+    } catch {
+        return $false
+    }
+}
+
 # ── 관리자 단계 ──
 function Install-Files {
     if (-not $DryRun -and -not (Test-Administrator)) { throw '관리자 권한이 필요합니다.' }
@@ -95,13 +117,8 @@ function Install-Files {
     # Get-Content 결과에는 경로 등 부가 속성이 붙어 JSON·레지스트리에 객체로 들어가므로 문자열로 바꾼다.
     $version = [string](Get-Content -LiteralPath (Join-Path $Package 'version.txt') -ErrorAction SilentlyContinue | Select-Object -First 1)
     # 공개 릴리스가 정식 인증서로 서명한 uiAccess판이면 이 PC 전용 인증서가 필요 없다.
-    # 'Valid'는 서명이 손상되지 않았고 인증서가 이 PC의 신뢰 루트로 이어진다는 뜻이다. 이 프로젝트가 쓰는
-    # 서명자(SignPath Foundation, docs/signing.md)일 때만 정식 서명판으로 본다. 다른 서명이면 자체 서명으로 덮어쓴다.
-    $alreadySigned = $false
-    if ($useUiAccess) {
-        $signature = Get-AuthenticodeSignature -LiteralPath $coreSource
-        $alreadySigned = $signature.Status -eq 'Valid' -and $signature.SignerCertificate.Subject -like '*SignPath Foundation*'
-    }
+    # 다른 서명이면 자체 서명으로 덮어쓴다.
+    $alreadySigned = $useUiAccess -and (Test-PublisherSigned $coreSource)
     # 인증서 단계(자식 범위)에서 만든 지문을 되돌리기에서도 쓰도록 스크립트 범위에 둔다.
     $script:newThumbprint = $null
     $isNewInstall = -not (Test-Path -LiteralPath $InstallDir)
@@ -256,6 +273,23 @@ function Install-ForUser {
             throw "패키지에 $file 이 없습니다. 릴리스 zip을 먼저 압축 해제한 폴더(또는 tools\package.ps1로 만든 폴더)에서 실행해 주세요."
         }
     }
+    # 스마트 앱 컨트롤이 실행을 막을 판이면 아무것도 바꾸기 전에 멈춘다. 그대로 진행하면 인증서·파일·자동 시작을
+    # 다 등록한 뒤 마지막 시작 단계에서야 실패한다. 실행할 코어와 설정 창이 모두 정식 서명판이면 통과한다.
+    if (-not $SkipSmartAppControlCheck -and (Test-SmartAppControlEnforced)) {
+        $coreFile = if ($NoUiAccess) { 'bin\glide-core.exe' } else { 'bin\glide-core-uiaccess.exe' }
+        $unsigned = @($coreFile, 'bin\glide-settings.exe' | Where-Object { -not (Test-PublisherSigned (Join-Path $Package $_)) })
+        if ($unsigned.Count -gt 0) {
+            $message = @'
+이 PC는 스마트 앱 컨트롤이 켜져 있어 Glide를 실행할 수 없습니다. 아무것도 바꾸지 않고 설치를 멈췄습니다.
+스마트 앱 컨트롤은 공인 인증서로 서명된 앱만 실행하는데, 이 판은 아직 공식 코드 서명이 없습니다.
+(-NoUiAccess로 설치해도 같은 이유로 실행되지 않습니다.)
+- 지금 쓰려면: Windows 보안 → 앱 및 브라우저 컨트롤 → 스마트 앱 컨트롤 설정에서 끈 뒤 다시 설치합니다.
+- 끄지 않으려면: 공식 서명판이 나올 때까지 기다려 주세요.
+자세한 내용은 README의 "스마트 앱 컨트롤" 절을 보세요.
+'@
+            if ($DryRun) { Write-Log "[계획] 실제 설치라면 여기서 멈춤: $message" } else { throw $message }
+        }
+    }
     Stop-RunningGlide
 
     if ($DryRun) {
@@ -293,7 +327,15 @@ function Install-ForUser {
         try {
             Start-Process -FilePath $core
         } catch {
-            throw "Glide를 시작하지 못했습니다: $($_.Exception.Message)`n관리자 창 지원판이 이 Windows에서 거부됐을 수 있습니다. -NoUiAccess로 다시 설치해 보세요."
+            # 원인에 맞는 안내를 한다. 스마트 앱 컨트롤이 막았다면 -NoUiAccess로 다시 설치해도 소용없다.
+            $hint = if (Test-SmartAppControlEnforced) {
+                '스마트 앱 컨트롤이 실행을 막았을 수 있습니다. README의 "스마트 앱 컨트롤" 절을 보세요.'
+            } elseif ($NoUiAccess) {
+                '보안 프로그램이 실행을 막았는지 확인해 주세요.'
+            } else {
+                '관리자 창 지원판이 이 Windows에서 거부됐을 수 있습니다. -NoUiAccess로 다시 설치해 보세요.'
+            }
+            throw "Glide를 시작하지 못했습니다: $($_.Exception.Message)`n$hint"
         }
     }
     Write-Log ''

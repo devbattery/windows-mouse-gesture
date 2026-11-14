@@ -108,6 +108,10 @@ jobs:
             '2. 압축을 푼 폴더의 `install.cmd`를 실행합니다(UAC 확인 1회).'
             '3. 제거는 설정 → 앱 → 설치된 앱의 **Glide for Windows** 또는 같은 폴더의 `uninstall.cmd`입니다.'
             ''
+            $(if ($env:SIGNPATH_ENABLED -eq 'true') { '' } else {
+              '> Windows 11의 스마트 앱 컨트롤이 켜져 있으면 서명 전인 이 판은 실행되지 않습니다. 설치 스크립트가 미리 확인해 멈추고 안내합니다(README "스마트 앱 컨트롤").'
+            })
+            ''
             '## 빌드 정보'
             ''
             "- 커밋: ``$env:GITHUB_SHA``"

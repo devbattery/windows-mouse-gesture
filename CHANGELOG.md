@@ -3,6 +3,16 @@
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)을 씁니다.
 릴리스 작업(`.github/workflows/release.yml`)이 해당 버전 절을 GitHub Release 노트로 씁니다.
 
+## [0.5.3] - 2026-11-14
+
+### 바뀜
+
+- Windows 11 **스마트 앱 컨트롤**이 켜져 있고 이 판이 공식 서명판이 아니면, 설치를 시작하기 전에(UAC 전) 아무것도
+  바꾸지 않고 멈춘 뒤 이유와 방법을 안내합니다. 이전에는 인증서·파일·자동 시작을 모두 등록한 뒤 마지막 시작 단계에서
+  실패하고, 효과가 없는 `-NoUiAccess` 재설치를 권했습니다. 확인을 건너뛰는 `-SkipSmartAppControlCheck`를 추가했습니다.
+- Glide 시작에 실패했을 때 원인(스마트 앱 컨트롤, 관리자 창 지원판 거부)에 맞게 안내합니다.
+- README에 "스마트 앱 컨트롤" 절을 추가했습니다.
+
 ## [0.5.2] - 2026-11-14
 
 ### 추가
@@ -85,5 +95,6 @@
 
 - 전역 마우스 훅과 제스처 인식(크롬 확장 Glide와 같은 규칙), 단순 우클릭 다시 보내기, 길게 누르기 통과.
 
+[0.5.3]: https://github.com/devbattery/windows-mouse-gesture/releases/tag/v0.5.3
 [0.5.2]: https://github.com/devbattery/windows-mouse-gesture/releases/tag/v0.5.2
 [0.5.1]: https://github.com/devbattery/windows-mouse-gesture/releases/tag/v0.5.1
