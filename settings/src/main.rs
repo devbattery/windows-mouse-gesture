@@ -268,6 +268,121 @@ fn clipboard_set(_text: &str) -> bool {
     false
 }
 
+/// 실행 중인 앱 목록에 보여 줄 최대 개수
+const MAX_RUNNING_APPS: usize = 100;
+/// 목록에 보여 줄 창 제목 최대 글자 수
+const MAX_TITLE_CHARS: usize = 80;
+/// 스토어(UWP) 앱 창을 대신 소유하는 프로세스
+const STORE_APP_HOST: &str = "applicationframehost.exe";
+
+/// 지금 창이 열린 앱 목록(예외 앱 고르기용). `[{ name, title }]`, 이름순.
+/// 창 제목은 화면에 보여 주기만 하고 저장하지 않는다. 예외 목록에는 실행 파일 이름만 들어간다.
+#[tauri::command(async)]
+fn running_apps() -> Vec<Value> {
+    running_app_list(top_level_windows())
+}
+
+/// (실행 파일 이름, 창 제목) 목록을 화면용으로 정리한다.
+/// - 이름은 코어 비교 규칙과 같게 소문자로 바꾸고, 같은 실행 파일은 첫 창 하나로 합친다.
+/// - Glide 자신은 뺀다(코어는 자기 창에서 제스처를 쓰지 않으므로 넣을 필요가 없다).
+fn running_app_list(windows: Vec<(String, String)>) -> Vec<Value> {
+    let mut apps: Vec<(String, String)> = Vec::new();
+    for (name, title) in windows {
+        let name = name.trim().to_lowercase();
+        let title = title.trim();
+        if name.is_empty()
+            || title.is_empty()
+            || name == ipc::CORE_EXE
+            || name == ipc::SETTINGS_EXE
+            || apps.iter().any(|(known, _)| *known == name)
+        {
+            continue;
+        }
+        let mut short: String = title.chars().take(MAX_TITLE_CHARS).collect();
+        if title.chars().count() > MAX_TITLE_CHARS {
+            short.push('…');
+        }
+        // 스토어 앱 창은 모두 ApplicationFrameHost.exe가 소유한다. 이 이름을 넣으면 스토어 앱 전체가
+        // 예외가 되므로, 창 제목 하나만 보고 고르지 않게 알린다.
+        if name == STORE_APP_HOST {
+            short = format!("스토어 앱 전체(예: {short})");
+        }
+        apps.push((name, short));
+    }
+    apps.sort_by(|a, b| a.0.cmp(&b.0));
+    apps.truncate(MAX_RUNNING_APPS);
+    apps.into_iter()
+        .map(|(name, title)| json!({ "name": name, "title": title }))
+        .collect()
+}
+
+/// 작업 표시줄에 보이는 최상위 창의 (실행 파일 이름, 제목) 목록.
+/// 코어는 우클릭한 창의 최상위 창 프로세스로 예외를 판정하므로(hook.rs `window_at`), 같은 기준으로 고른다.
+#[cfg(windows)]
+fn top_level_windows() -> Vec<(String, String)> {
+    use windows_sys::Win32::Foundation::{HWND, LPARAM};
+    use windows_sys::Win32::Graphics::Dwm::{DWMWA_CLOAKED, DwmGetWindowAttribute};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        EnumWindows, GW_OWNER, GWL_EXSTYLE, GetWindow, GetWindowLongW, GetWindowTextW,
+        GetWindowThreadProcessId, IsWindowVisible, WS_EX_TOOLWINDOW,
+    };
+
+    /// 창 하나를 살펴 조건에 맞으면 목록에 넣는다. 열거는 항상 계속한다.
+    unsafe extern "system" fn visit(window: HWND, param: LPARAM) -> windows_sys::core::BOOL {
+        // SAFETY: param은 아래 EnumWindows 호출 동안만 살아 있는 Vec을 가리킨다(같은 스레드, 동기 호출).
+        let found = unsafe { &mut *(param as *mut Vec<(u32, String)>) };
+        // SAFETY: 열거가 넘겨준 창 핸들로 조회만 한다. 창이 그사이 사라지면 조회가 실패할 뿐이다.
+        unsafe {
+            // 보이는 창, 소유 창이 없는 창(대화상자·팝업 제외), 도구 창이 아닌 창
+            if IsWindowVisible(window) == 0
+                || !GetWindow(window, GW_OWNER).is_null()
+                || (GetWindowLongW(window, GWL_EXSTYLE) as u32) & WS_EX_TOOLWINDOW != 0
+            {
+                return 1;
+            }
+            // 가려진 창(일시 중단된 스토어 앱, 다른 가상 데스크톱의 창)은 지금 보이는 앱이 아니다.
+            let mut cloaked: u32 = 0;
+            let result = DwmGetWindowAttribute(
+                window,
+                DWMWA_CLOAKED as u32,
+                (&mut cloaked as *mut u32).cast(),
+                size_of::<u32>() as u32,
+            );
+            if result >= 0 && cloaked != 0 {
+                return 1;
+            }
+            let mut buffer = [0u16; 256];
+            let length = GetWindowTextW(window, buffer.as_mut_ptr(), buffer.len() as i32);
+            if length <= 0 {
+                return 1;
+            }
+            let mut pid = 0;
+            GetWindowThreadProcessId(window, &mut pid);
+            if pid != 0 {
+                found.push((pid, String::from_utf16_lossy(&buffer[..length as usize])));
+            }
+        }
+        1
+    }
+
+    let mut found: Vec<(u32, String)> = Vec::new();
+    // SAFETY: 콜백은 이 호출 안에서만 불리고, found는 호출이 끝날 때까지 살아 있다.
+    unsafe { EnumWindows(Some(visit), &mut found as *mut _ as LPARAM) };
+    found
+        .into_iter()
+        .filter_map(|(pid, title)| {
+            // 이름 조회는 최소 권한(제한 조회)이다. 읽지 못하는 프로세스는 예외에 넣을 수도 없으니 뺀다.
+            let path = ipc::process_path(pid)?;
+            Some((path.file_name()?.to_string_lossy().into_owned(), title))
+        })
+        .collect()
+}
+
+#[cfg(not(windows))]
+fn top_level_windows() -> Vec<(String, String)> {
+    Vec::new()
+}
+
 fn rule_values(rules: &[Rule]) -> Vec<Value> {
     rules.iter().map(Rule::to_value).collect()
 }
@@ -369,6 +484,7 @@ fn main() {
             save,
             start_core,
             open_info,
+            running_apps,
             import_backup,
             export_backup
         ])
@@ -376,5 +492,54 @@ fn main() {
     if let Err(error) = result {
         eprintln!("Glide 설정 창을 열지 못했습니다: {error}");
         std::process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pair(name: &str, title: &str) -> (String, String) {
+        (name.to_string(), title.to_string())
+    }
+
+    #[test]
+    fn running_apps_are_merged_sorted_and_without_glide() {
+        let list = running_app_list(vec![
+            pair("Game.EXE", "My Game"),
+            pair("explorer.exe", "문서"),
+            pair("game.exe", "My Game - 두 번째 창"),
+            pair("glide-settings.exe", "Glide 설정"),
+            pair("glide-core.exe", "Glide"),
+            pair("notitle.exe", "   "),
+            pair("", "이름 없음"),
+        ]);
+        assert_eq!(
+            list,
+            [
+                json!({ "name": "explorer.exe", "title": "문서" }),
+                json!({ "name": "game.exe", "title": "My Game" }),
+            ]
+        );
+    }
+
+    #[test]
+    fn running_app_titles_and_count_are_limited() {
+        let long = "가".repeat(MAX_TITLE_CHARS + 5);
+        let list = running_app_list(vec![pair("a.exe", &long)]);
+        let title = list[0]["title"].as_str().unwrap();
+        assert_eq!(title.chars().count(), MAX_TITLE_CHARS + 1);
+        assert!(title.ends_with('…'));
+
+        let many = (0..MAX_RUNNING_APPS + 20)
+            .map(|index| pair(&format!("app{index:03}.exe"), "창"))
+            .collect();
+        assert_eq!(running_app_list(many).len(), MAX_RUNNING_APPS);
+    }
+
+    #[test]
+    fn store_app_host_is_labeled_as_all_store_apps() {
+        let list = running_app_list(vec![pair("ApplicationFrameHost.exe", "계산기")]);
+        assert_eq!(list[0]["title"], "스토어 앱 전체(예: 계산기)");
     }
 }

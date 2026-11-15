@@ -117,6 +117,15 @@
           <button type="submit" class="secondary">추가</button>
         </form>
         <p id="exclude-error" class="field-error" role="status"></p>
+        <div class="suggested running">
+          <div class="running-head">
+            <h4 id="running-title">실행 중인 앱에서 고르기</h4>
+            <button id="running-load" type="button" class="secondary">실행 중인 앱 보기</button>
+          </div>
+          <p class="running-hint">게임처럼 실행 파일 이름을 모르는 앱은 켜 둔 채로 여기서 고른 뒤 저장하세요. 창 제목은 이 화면에만 보이고 저장되지 않습니다.</p>
+          <ul id="running" class="suggested-list" aria-labelledby="running-title" hidden></ul>
+          <p id="running-status" class="running-hint" role="status"></p>
+        </div>
         <div class="suggested">
           <h4 id="suggested-title">많이 넣는 앱</h4>
           <ul id="suggested" class="suggested-list" aria-labelledby="suggested-title"></ul>

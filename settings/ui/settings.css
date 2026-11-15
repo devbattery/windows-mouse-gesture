@@ -240,6 +240,12 @@ dialog[open]{display:flex;flex-direction:column;gap:18px}
 .suggested-list button:hover:enabled{border-color:var(--accent);color:var(--accent-ink)}
 .suggested-list button:disabled{opacity:.55;cursor:default}
 .suggested-list code{font-family:ui-monospace,Consolas,monospace}
+/* 실행 중인 앱에서 고르기 */
+.running-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.running-head h4{margin:4px 0}
+.running-hint{margin:6px 0;font-size:13px;color:var(--text-2)}
+.running-hint:empty{display:none}
+.running .suggested-list .app-title{max-width:28ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-2)}
 @media (max-width:640px){.windows{padding:18px 16px}}
 
 /* 일상 사용 점검: 최근 우클릭 기록·길게 누르기 추천·진단 정보 */

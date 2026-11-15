@@ -1,6 +1,6 @@
 [package]
 name = "glide-settings"
-version = "0.5.4"
+version = "0.5.5"
 edition = "2024"
 rust-version = "1.85"
 description = "Glide for Windows 설정 창"
@@ -30,6 +30,8 @@ serde_json = "1"
 # 진단 정보 복사(클립보드). WebView2의 클립보드 API는 권한 확인 창을 띄울 수 있어 Win32로 직접 쓴다.
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
+    # 실행 중인 앱 목록에서 가려진 창 빼기(예외 앱 고르기)
+    "Win32_Graphics_Dwm",
     "Win32_System_DataExchange",
     "Win32_System_Memory",
     "Win32_System_Ole",

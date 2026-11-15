@@ -3,6 +3,18 @@
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)을 씁니다.
 릴리스 작업(`.github/workflows/release.yml`)이 해당 버전 절을 GitHub Release 노트로 씁니다.
 
+## [0.5.5] - 2026-11-15
+
+### 추가
+
+- 설정 창 **실행 중인 앱에서 고르기**: 지금 창이 열린 앱을 "실행 파일 이름 · 창 제목"으로 보여 주고, 누르면 예외 앱에
+  넣습니다. 게임처럼 실행 파일 이름을 모르는 앱을 켜 둔 채로 고르면 됩니다. 창 제목은 화면에만 보이고 저장하지 않습니다.
+
+### 고침
+
+- 예외 앱에서 30초 넘게 쉬었다가 처음 누른 우클릭이 잠깐 삼켜졌다가 다시 보내지던 문제. 다시 보낸 입력은 조금 늦고,
+  주입 입력을 무시하는 게임에서는 사라질 수 있었습니다. 이제 이전 판정을 그대로 쓰고 판정은 뒤에서 새로 받습니다.
+
 ## [0.5.4] - 2026-11-14
 
 ### 추가
@@ -111,6 +123,7 @@
 
 - 전역 마우스 훅과 제스처 인식(크롬 확장 Glide와 같은 규칙), 단순 우클릭 다시 보내기, 길게 누르기 통과.
 
+[0.5.5]: https://github.com/devbattery/windows-mouse-gesture/releases/tag/v0.5.5
 [0.5.4]: https://github.com/devbattery/windows-mouse-gesture/releases/tag/v0.5.4
 [0.5.3]: https://github.com/devbattery/windows-mouse-gesture/releases/tag/v0.5.3
 [0.5.2]: https://github.com/devbattery/windows-mouse-gesture/releases/tag/v0.5.2

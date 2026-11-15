@@ -282,26 +282,67 @@ function addExclusion(raw) {
   return "";
 }
 
+/// 예외 추가 칩 하나(많이 넣는 앱·실행 중인 앱 공용). 이미 넣은 앱은 ✓로 표시하고 누를 수 없게 한다.
+/// note는 이름 뒤에 붙는 설명(추천 이유 또는 창 제목)이다.
+function exclusionChip(name, note) {
+  const item = document.createElement("li");
+  const button = document.createElement("button");
+  button.type = "button";
+  const added = settings.windows.excludedProcesses.includes(name);
+  button.disabled = added;
+  const code = document.createElement("code");
+  code.textContent = name;
+  const text = document.createElement("span");
+  text.className = "app-title";
+  text.textContent = note;
+  text.title = note;
+  button.append(added ? "✓ " : "+ ", code, " · ", text);
+  button.setAttribute("aria-label", added ? `${name}(${note}) 이미 예외에 있음` : `${name}(${note}) 예외에 추가`);
+  button.addEventListener("click", () => {
+    // 목록을 다시 그리면 누른 버튼이 바뀌므로, 키보드 위치를 잃지 않게 같은 목록의 누를 수 있는 칩으로 옮긴다.
+    const listId = button.closest("ul").id;
+    $("#exclude-error").textContent = addExclusion(name);
+    const next = document.querySelector(`#${listId} button:enabled`);
+    (next ?? $("#exclude-input")).focus();
+  });
+  item.append(button);
+  return item;
+}
+
 let suggestedExclusions = [];
 function renderSuggested() {
   const list = $("#suggested");
-  list.replaceChildren(...suggestedExclusions.map(({ name, reason }) => {
-    const item = document.createElement("li");
-    const button = document.createElement("button");
-    button.type = "button";
-    const added = settings.windows.excludedProcesses.includes(name);
-    button.disabled = added;
-    const code = document.createElement("code");
-    code.textContent = name;
-    button.append(added ? "✓ " : "+ ", code, ` · ${reason}`);
-    button.setAttribute("aria-label", added ? `${name}(${reason}) 이미 예외에 있음` : `${name}(${reason}) 예외에 추가`);
-    button.addEventListener("click", () => {
-      $("#exclude-error").textContent = addExclusion(name);
-    });
-    item.append(button);
-    return item;
-  }));
+  list.replaceChildren(...suggestedExclusions.map(({ name, reason }) => exclusionChip(name, reason)));
   list.parentElement.hidden = suggestedExclusions.length === 0;
+  renderRunning();
+}
+
+// 실행 중인 앱(설정 창이 읽은 최상위 창 목록). 처음에는 비어 있고, 버튼을 눌렀을 때만 읽는다.
+let runningApps;
+function renderRunning() {
+  const list = $("#running");
+  if (!runningApps) return;
+  list.replaceChildren(...runningApps.map(({ name, title }) => exclusionChip(name, title)));
+  list.hidden = runningApps.length === 0;
+}
+
+async function loadRunning() {
+  const button = $("#running-load");
+  button.disabled = true;
+  $("#running-status").textContent = "실행 중인 앱을 읽는 중…";
+  try {
+    runningApps = await invoke("running_apps");
+    renderRunning();
+    $("#running-status").textContent = runningApps.length
+      ? `창이 열린 앱 ${runningApps.length}개. 넣을 앱을 누른 뒤 아래 저장 막대에서 저장하세요. ` +
+        "찾는 앱이 없으면 Glide가 그 앱의 이름을 읽을 수 없는 경우라 예외로 둘 수 없으니, 그 앱을 쓰는 동안 트레이 메뉴의 '제스처 사용'을 꺼 주세요."
+      : "창이 열린 앱이 없습니다. 넣을 앱을 켠 뒤 다시 눌러 주세요.";
+    button.textContent = "새로 고침";
+  } catch (error) {
+    $("#running-status").textContent = `실행 중인 앱을 읽지 못했습니다: ${error}`;
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function render() {
@@ -533,6 +574,7 @@ $("#exclude-form").addEventListener("submit", event => {
   $("#exclude-error").textContent = error;
   if (!error) input.value = "";
 });
+$("#running-load").addEventListener("click", loadRunning);
 
 // ── 일상 사용 점검 ──
 let diagnostics;

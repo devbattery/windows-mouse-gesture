@@ -59,8 +59,24 @@ const DESKTOP_CHECK_TICKS: u32 = 16;
 const REINSTALL_MS: u32 = 60_000;
 /// 예외 판정 캐시 최대 크기. 넘으면 비운다.
 const MAX_CACHED_PROCESSES: usize = 512;
-/// 예외 판정을 믿는 시간. 지나면 다시 판정한다(PID 재사용 대비).
+/// 예외 판정을 새것으로 보는 시간. 지나면 다시 판정한다(PID 재사용 대비).
 const EXCLUSION_TTL: Duration = Duration::from_secs(30);
+
+/// 캐시된 예외 판정을 이번 누름에 어떻게 쓸지 정한다. 돌려주는 값은 (이번에 쓸 판정, 다시 판정할지)다.
+/// - 처음 보는 프로세스: 판정 없음 → 다시 판정(그동안 제스처로 시작하는 낙관적 시작)
+/// - 새 판정: 그대로 쓴다.
+/// - 오래된 판정: 이번 누름에는 그대로 쓰고 뒤에서 다시 판정한다. 예외로 넣은 게임에서 30초마다 첫 우클릭이
+///   삼켜졌다가 다시 보내지는(늦고, 주입 입력을 무시하는 게임에서는 사라지는) 일을 막는다. PID가 그사이 다른
+///   프로세스에 다시 쓰였다면 틀린 판정은 누름 한 번에만 쓰이고, 실행 직전 예외 확인(worker)도 남아 있다.
+fn cached_verdict(entry: Option<&(bool, Instant)>, now: Instant) -> (Option<bool>, bool) {
+    match entry {
+        None => (None, true),
+        Some(&(excluded, at)) => (
+            Some(excluded),
+            now.saturating_duration_since(at) >= EXCLUSION_TTL,
+        ),
+    }
+}
 
 /// 훅 콜백 처리 시간. 트레이 상태 줄과 콘솔 통계가 읽는다.
 pub static HOOK_LATENCY: LatencyHistogram = LatencyHistogram::new();
@@ -282,20 +298,19 @@ impl Context {
             if pid == self.own_pid {
                 allowed = false;
             } else if pid != 0 {
-                // 판정은 잠깐만 믿는다. PID는 프로세스가 끝나면 다른 프로세스에 다시 쓰이기 때문이다.
-                match self.exclusions.get(&pid) {
-                    Some((excluded, at)) if at.elapsed() < EXCLUSION_TTL => {
-                        allowed = !excluded;
-                        if *excluded {
-                            // 예외 앱의 우클릭도 최근 기록에 남겨, 예외가 실제로 적용되는지 볼 수 있게 한다.
-                            self.send(Event::Outcome {
-                                ending: Ending::Excluded,
-                                pid,
-                            });
-                        }
-                    }
-                    // 처음 보거나 오래된 판정: 일단 제스처로 시작하고 워커에 판정을 맡긴다(낙관적 시작).
-                    _ => self.send(Event::Resolve { pid }),
+                let (verdict, refresh) = cached_verdict(self.exclusions.get(&pid), Instant::now());
+                if verdict == Some(true) {
+                    allowed = false;
+                    // 예외 앱의 우클릭도 최근 기록에 남겨, 예외가 실제로 적용되는지 볼 수 있게 한다.
+                    self.send(Event::Outcome {
+                        ending: Ending::Excluded,
+                        pid,
+                    });
+                }
+                // 처음 보는 프로세스는 일단 제스처로 시작하고(낙관적 시작), 오래된 판정은 이번에 쓰되
+                // 워커에 다시 판정을 맡긴다.
+                if refresh {
+                    self.send(Event::Resolve { pid });
                 }
             }
         }
@@ -562,4 +577,32 @@ fn dpi_at(point: POINT) -> u32 {
         GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &mut dpi_x, &mut dpi_y)
     };
     if result < 0 { 96 } else { dpi_x }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cached_verdict_uses_fresh_and_stale_entries() {
+        let now = Instant::now();
+        let later = now + EXCLUSION_TTL;
+        // 처음 보는 프로세스: 판정 없이 다시 판정
+        assert_eq!(cached_verdict(None, now), (None, true));
+        // 새 판정은 그대로, 다시 판정하지 않음
+        assert_eq!(cached_verdict(Some(&(true, now)), now), (Some(true), false));
+        assert_eq!(
+            cached_verdict(Some(&(false, now)), now),
+            (Some(false), false)
+        );
+        // 오래된 판정도 이번 누름에는 쓰고, 다시 판정
+        assert_eq!(
+            cached_verdict(Some(&(true, now)), later),
+            (Some(true), true)
+        );
+        assert_eq!(
+            cached_verdict(Some(&(false, now)), later),
+            (Some(false), true)
+        );
+    }
 }
