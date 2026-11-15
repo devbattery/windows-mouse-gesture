@@ -8,9 +8,11 @@ use std::cell::RefCell;
 use std::path::PathBuf;
 use std::ptr::{null, null_mut};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{self, Receiver, Sender, SyncSender};
+use std::time::Duration;
 
 use glide_core::actions::{Hud, Tone, gesture_hud};
+use glide_core::apps::{self, RunningApp};
 use glide_core::gesture::Sequence;
 use glide_core::ipc;
 use glide_core::update::{Version, release_url};
@@ -25,11 +27,12 @@ use windows_sys::Win32::System::RemoteDesktop::{
 use windows_sys::Win32::UI::Shell::{NIN_BALLOONUSERCLICK, NIN_SELECT, NINF_KEY};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu, DestroyWindow,
-    DispatchMessageW, GetCursorPos, GetMessageW, KillTimer, MF_CHECKED, MF_GRAYED, MF_SEPARATOR,
-    MF_STRING, MSG, PBT_APMRESUMEAUTOMATIC, PBT_APMRESUMESUSPEND, PostMessageW, PostQuitMessage,
-    PostThreadMessageW, RegisterClassExW, RegisterWindowMessageW, SetForegroundWindow, SetTimer,
-    TPM_NONOTIFY, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, WM_CONTEXTMENU, WM_DISPLAYCHANGE,
-    WM_NULL, WM_POWERBROADCAST, WM_TIMER, WM_WTSSESSION_CHANGE, WNDCLASSEXW, WS_OVERLAPPED,
+    DispatchMessageW, GetCursorPos, GetMessageW, KillTimer, MF_CHECKED, MF_GRAYED, MF_POPUP,
+    MF_SEPARATOR, MF_STRING, MSG, PBT_APMRESUMEAUTOMATIC, PBT_APMRESUMESUSPEND, PostMessageW,
+    PostQuitMessage, PostThreadMessageW, RegisterClassExW, RegisterWindowMessageW,
+    SetForegroundWindow, SetTimer, TPM_NONOTIFY, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu,
+    WM_CONTEXTMENU, WM_DISPLAYCHANGE, WM_NULL, WM_POWERBROADCAST, WM_TIMER, WM_WTSSESSION_CHANGE,
+    WNDCLASSEXW, WS_OVERLAPPED,
 };
 
 use super::overlay::Overlay;
@@ -38,7 +41,7 @@ use super::shared::{
     UI_ACCESS, UI_WINDOW, WM_HOOK_RESET, WM_UI_EXIT, WM_UI_TRAY, WM_UI_WAKE,
 };
 use super::tray::Tray;
-use super::{hook, launch, log, update};
+use super::{hook, launch, log, update, worker};
 
 /// 훅·워커 → UI 스레드 사건.
 #[derive(Clone, Debug)]
@@ -90,6 +93,15 @@ const MENU_OPEN_SETTINGS: usize = 2;
 const MENU_OPEN_FOLDER: usize = 3;
 const MENU_EXIT: usize = 4;
 const MENU_UPDATE: usize = 5;
+const MENU_MANAGE_EXCLUSIONS: usize = 6;
+/// 트레이 하위 메뉴 "제스처를 쓰지 않을 앱"의 앱 항목 번호 시작값(+ 목록 순서)
+const MENU_APP_BASE: usize = 100;
+/// 트레이 하위 메뉴에 보여 줄 앱 최대 개수
+const MENU_MAX_APPS: usize = 20;
+/// 트레이 메뉴 항목의 창 제목 최대 글자 수
+const MENU_TITLE_CHARS: usize = 40;
+/// 트레이에서 예외를 바꿀 때 저장 결과를 기다리는 최대 시간
+const SAVE_WAIT: Duration = Duration::from_secs(3);
 
 static WAKE_PENDING: AtomicBool = AtomicBool::new(false);
 /// Explorer 재시작 알림 메시지 번호
@@ -118,6 +130,8 @@ struct Ui {
     showing_result: bool,
     /// 마지막으로 띄운 트레이 알림이 새 버전 알림인지(알림을 누르면 Release 페이지를 연다)
     update_balloon: bool,
+    /// 워커로 보내는 사건(트레이 메뉴에서 예외 앱을 바꿀 때 설정 저장 요청)
+    worker: SyncSender<worker::Event>,
 }
 
 thread_local! {
@@ -142,6 +156,7 @@ pub fn run(
     settings_folder: PathBuf,
     ready: Sender<isize>,
     startup_notice: Option<String>,
+    worker: SyncSender<worker::Event>,
 ) {
     // 탐색기를 통한 실행(launch.rs, 셸 COM 객체)을 위해 단일 스레드 아파트로 COM을 초기화한다.
     // SAFETY: 이 스레드에서 한 번 초기화하고 끝날 때 해제한다.
@@ -215,6 +230,7 @@ pub fn run(
             settings_folder,
             showing_result: false,
             update_balloon: false,
+            worker,
         })
     });
     UI_WINDOW.store(window as isize, Ordering::Release);
@@ -460,6 +476,12 @@ fn show_menu(window: HWND) {
     };
     let enabled = RUNTIME_ENABLED.load(Ordering::Relaxed);
     let update_item = update::available().map(|version| format!("새 버전 받기 ({version})"));
+    // 하위 메뉴용 앱 목록. 메뉴를 열 때마다 새로 읽고, 고른 항목은 이 스냅샷의 이름으로 처리한다.
+    let running: Vec<RunningApp> = apps::running_apps()
+        .into_iter()
+        .take(MENU_MAX_APPS)
+        .collect();
+    let excluded = shared::settings();
     // SAFETY: 메뉴를 만들어 띄우고 바로 해제한다. 메뉴 전에 창을 전면으로 두어야 바깥을 누르면 닫힌다.
     let command = unsafe {
         let menu = CreatePopupMenu();
@@ -474,6 +496,37 @@ fn show_menu(window: HWND) {
             MENU_TOGGLE,
             "제스처 사용",
         );
+        // 제스처를 쓰지 않을 앱: 지금 창이 열린 앱(최근에 앞에 있던 창부터). 체크 = 예외에 있음, 누르면 넣거나 뺀다.
+        let apps_menu = CreatePopupMenu();
+        if !apps_menu.is_null() {
+            let sub = |flags: u32, id: usize, text: &str| {
+                AppendMenuW(apps_menu, flags, id, wide(text).as_ptr());
+            };
+            if running.is_empty() {
+                sub(MF_STRING | MF_GRAYED, 0, "창이 열린 앱이 없습니다");
+            }
+            for (index, app) in running.iter().enumerate() {
+                let checked = if excluded.is_excluded(&app.name) {
+                    MF_CHECKED
+                } else {
+                    0
+                };
+                sub(
+                    MF_STRING | checked,
+                    MENU_APP_BASE + index,
+                    &apps::menu_text(app, MENU_TITLE_CHARS),
+                );
+            }
+            AppendMenuW(apps_menu, MF_SEPARATOR, 0, null());
+            sub(MF_STRING, MENU_MANAGE_EXCLUSIONS, "설정 창에서 관리…");
+            // MF_POPUP 항목은 하위 메뉴를 함께 가지므로 아래 DestroyMenu(menu)가 함께 해제한다.
+            AppendMenuW(
+                menu,
+                MF_STRING | MF_POPUP,
+                apps_menu as usize,
+                wide("제스처를 쓰지 않을 앱").as_ptr(),
+            );
+        }
         item(MF_STRING, MENU_OPEN_SETTINGS, "설정 열기");
         item(MF_STRING, MENU_OPEN_FOLDER, "설정 폴더 열기");
         if let Some(text) = &update_item {
@@ -506,7 +559,12 @@ fn show_menu(window: HWND) {
             log::info(|| format!("[트레이] 제스처 {}", if enabled { "끔" } else { "켬" }));
             with_ui(|ui| ui.tray.set_tip(&tip()));
         }
-        MENU_OPEN_SETTINGS => open_settings(),
+        MENU_OPEN_SETTINGS | MENU_MANAGE_EXCLUSIONS => open_settings(),
+        id if id >= MENU_APP_BASE => {
+            if let Some(app) = running.get(id - MENU_APP_BASE) {
+                toggle_exclusion(&app.name);
+            }
+        }
         MENU_OPEN_FOLDER => {
             if let Some(folder) = with_ui(|ui| ui.settings_folder.clone())
                 && !launch::open(&folder.display().to_string(), None)
@@ -521,6 +579,47 @@ fn show_menu(window: HWND) {
         }
         _ => {}
     }
+}
+
+/// 트레이 메뉴에서 고른 앱을 예외 목록에 넣거나 뺀다. 설정 창 저장과 같은 경로(워커 → 파일 저장 → 반영)로 저장하고
+/// 결과를 트레이 알림으로 알린다. 메뉴는 이미 닫힌 뒤라, 저장을 기다리는 짧은 동안만 UI가 멈춘다.
+fn toggle_exclusion(name: &str) {
+    let result = shared::settings()
+        .toggle_exclusion(name)
+        .and_then(|(settings, added)| {
+            let worker = with_ui(|ui| ui.worker.clone()).ok_or("UI 상태를 읽지 못했습니다.")?;
+            let (reply, result) = mpsc::sync_channel(1);
+            // 대기열이 가득 차 있어도 UI 스레드가 막히지 않게 try_send를 쓴다.
+            worker
+                .try_send(worker::Event::Save {
+                    settings: Box::new(settings),
+                    reply,
+                })
+                .map_err(|_| {
+                    "설정을 저장하는 스레드가 바쁩니다. 잠시 뒤 다시 눌러 주세요.".to_string()
+                })?;
+            match result.recv_timeout(SAVE_WAIT) {
+                Ok(saved) => saved.map(|()| added),
+                Err(_) => Err(
+                    "저장이 늦어지고 있습니다. 잠시 뒤 트레이 메뉴에서 다시 확인해 주세요.".into(),
+                ),
+            }
+        });
+    log::info(|| format!("[트레이] 예외 앱 {name}: {result:?}"));
+    with_ui(|ui| {
+        ui.update_balloon = false;
+        match &result {
+            Ok(true) => ui.tray.info(
+                "제스처를 쓰지 않을 앱에 넣었습니다",
+                &format!("{name}에서는 이제 우클릭이 원래대로 동작합니다. 다시 쓰려면 같은 메뉴에서 한 번 더 누르세요."),
+            ),
+            Ok(false) => ui.tray.info(
+                "제스처를 쓰지 않을 앱에서 뺐습니다",
+                &format!("{name}에서 다시 제스처를 씁니다."),
+            ),
+            Err(message) => ui.tray.warn("예외 앱을 바꾸지 못했습니다", message),
+        }
+    });
 }
 
 /// 확인된 새 버전의 Release 페이지를 기본 브라우저로 연다. 주소는 검증한 버전 숫자로만 만든다.

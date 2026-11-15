@@ -3,6 +3,19 @@
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)을 씁니다.
 릴리스 작업(`.github/workflows/release.yml`)이 해당 버전 절을 GitHub Release 노트로 씁니다.
 
+## [0.5.6] - 2026-11-15
+
+### 추가
+
+- 트레이 메뉴 **제스처를 쓰지 않을 앱**: 지금 창이 열린 앱을 최근에 앞에 있던 창부터 보여 주고, 예외 앱에는 체크가
+  붙습니다. 누르면 설정 창을 열지 않고 바로 예외에 넣거나 빼며, 결과를 트레이 알림으로 알립니다.
+
+### 바뀜
+
+- 설정 창 **실행 중인 앱에서 고르기**도 이름순 대신 최근에 앞에 있던 창부터 보여 줍니다.
+- 설정 창을 열어 둔 채 다른 곳(트레이 메뉴, 설정 파일 직접 수정)에서 설정이 바뀌면, 설정 창이 몇 초 안에 다시
+  읽습니다. 저장하지 않은 변경이 있으면 덮어쓰지 않고 알립니다.
+
 ## [0.5.5] - 2026-11-15
 
 ### 추가
@@ -123,6 +136,7 @@
 
 - 전역 마우스 훅과 제스처 인식(크롬 확장 Glide와 같은 규칙), 단순 우클릭 다시 보내기, 길게 누르기 통과.
 
+[0.5.6]: https://github.com/devbattery/windows-mouse-gesture/releases/tag/v0.5.6
 [0.5.5]: https://github.com/devbattery/windows-mouse-gesture/releases/tag/v0.5.5
 [0.5.4]: https://github.com/devbattery/windows-mouse-gesture/releases/tag/v0.5.4
 [0.5.3]: https://github.com/devbattery/windows-mouse-gesture/releases/tag/v0.5.3

@@ -297,11 +297,44 @@ impl Settings {
         let name = process_name.to_lowercase();
         self.excluded_processes.contains(&name)
     }
+
+    /// 예외 목록에 앱을 넣거나(없을 때) 뺀(있을 때) 새 설정. 트레이 메뉴에서 쓴다.
+    /// 결과는 설정 파일 형식으로 바꿔 `validate`로 다시 검증하므로, 이름 형식·개수 한도가 설정 창 저장과 같다.
+    /// 돌려주는 bool은 넣었으면 true, 뺐으면 false다.
+    pub fn toggle_exclusion(&self, process_name: &str) -> Result<(Settings, bool), String> {
+        let name = process_name.trim().to_lowercase();
+        let mut names = self.excluded_processes.clone();
+        let added = if let Some(index) = names.iter().position(|known| *known == name) {
+            names.remove(index);
+            false
+        } else {
+            names.push(name);
+            true
+        };
+        let mut value = self.to_value();
+        value["windows"]["excludedProcesses"] = json!(names);
+        Ok((validate(&value)?, added))
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn toggle_exclusion_adds_removes_and_validates() {
+        let settings = Settings::default();
+        let (added, was_added) = settings.toggle_exclusion("Game.EXE").unwrap();
+        assert!(was_added);
+        assert_eq!(added.excluded_processes, ["game.exe"]);
+        // 다른 설정 값은 그대로다.
+        assert_eq!(added.rules, settings.rules);
+        let (removed, was_added) = added.toggle_exclusion("game.exe").unwrap();
+        assert!(!was_added);
+        assert!(removed.excluded_processes.is_empty());
+        // 형식이 틀린 이름은 설정 창과 같은 검증에서 걸린다.
+        assert!(settings.toggle_exclusion("C:\\game.exe").is_err());
+    }
 
     #[test]
     fn defaults_round_trip() {

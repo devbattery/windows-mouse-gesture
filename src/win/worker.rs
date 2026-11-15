@@ -328,15 +328,16 @@ fn apply(settings: Settings) {
     post_hook(WM_HOOK_CLEAR_EXCLUSIONS, 0, 0);
 }
 
-/// 설정 창에서 받은 설정을 파일에 저장하고 바로 반영한다.
+/// 설정 창이나 트레이 메뉴에서 받은 설정을 파일에 저장하고 바로 반영한다.
 fn save(store: &mut Store, settings: Settings, ui: &SyncSender<UiEvent>) -> Result<(), String> {
     store
         .save(&settings)
         .map_err(|error| format!("설정 파일을 저장하지 못했습니다: {error}"))?;
     log::info(|| {
         format!(
-            "[설정] 설정 창에서 저장 · 제스처 {}개",
-            settings.rules.len()
+            "[설정] 저장 · 제스처 {}개 · 예외 앱 {}개",
+            settings.rules.len(),
+            settings.excluded_processes.len()
         )
     });
     let before = shared::gestures_active();

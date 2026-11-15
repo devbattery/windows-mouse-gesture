@@ -435,11 +435,27 @@ function showSettingsError(message) {
   $("#settings-error").textContent = message ? `설정 파일 오류: ${message} (이전 설정으로 동작 중)` : "";
 }
 
+// 화면이 읽은 설정의 반영 번호(코어 상태의 settingsRevision). 이전 코어에는 없어서 undefined일 수 있다.
+let settingsRevision;
+
 async function refreshStatus() {
   try {
     const core = await invoke("status");
     // 코어가 새로 켜졌고 화면에 저장하지 않은 변경이 없으면 코어의 설정으로 다시 읽는다.
-    if (renderCore(core) && !isDirty()) await load();
+    if (renderCore(core) && !isDirty()) {
+      await load();
+      return;
+    }
+    // 다른 곳(트레이 메뉴·설정 파일 직접 수정)에서 설정이 바뀌었으면 다시 읽는다. 이 화면에 저장하지 않은 변경이
+    // 있으면 덮어쓰지 않고, 지금 저장하면 그 변경을 덮어쓴다고 알린다.
+    const revision = core.status?.settingsRevision;
+    if (revision === undefined || settingsRevision === undefined || revision === settingsRevision) return;
+    if (!isDirty()) {
+      await load();
+      status("다른 곳(트레이 메뉴 등)에서 바뀐 설정을 다시 읽었습니다.");
+    } else {
+      status("다른 곳(트레이 메뉴 등)에서 설정이 바뀌었습니다. 지금 저장하면 그 변경을 덮어씁니다.", true);
+    }
   } catch {}
 }
 
@@ -809,6 +825,8 @@ $("#save").addEventListener("click", async () => {
     $("#save").disabled = true;
     await invoke("save", { settings: { schemaVersion: 1, enabled: settings.enabled, threshold: settings.threshold, rules, windows: settings.windows } });
     $("#save").dataset.dirty = "false";
+    // 방금 저장한 것도 반영 번호를 올리므로, 새 번호를 받아 두어 자기 저장을 "다른 곳의 변경"으로 보지 않게 한다.
+    settingsRevision = (await invoke("status").catch(() => ({})))?.status?.settingsRevision;
     clearBackupStatus();
     checkupStatus("");
     showSettingsError("");
@@ -842,6 +860,7 @@ async function load() {
   applyCatalog(data.catalog);
   suggestedExclusions = data.suggestedExclusions ?? [];
   settings = data.settings;
+  settingsRevision = data.core?.status?.settingsRevision;
   renderCore(data.core);
   showSettingsError(data.settingsError);
   $("#about-version").textContent = `Glide ${data.version}`;

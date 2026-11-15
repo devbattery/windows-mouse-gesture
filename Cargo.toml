@@ -5,7 +5,7 @@ members = [".", "settings"]
 
 [package]
 name = "glide-core"
-version = "0.5.5"
+version = "0.5.6"
 edition = "2024"
 rust-version = "1.85"
 description = "Glide for Windows: 모든 Windows 앱에서 쓰는 우클릭 마우스 제스처"
@@ -32,6 +32,8 @@ serde_json = "1"
 # 훅·입력·창·트레이처럼 COM이 필요 없는 Win32 API
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
+    # 실행 중인 앱 목록에서 가려진 창 빼기(src/apps.rs)
+    "Win32_Graphics_Dwm",
     "Win32_Graphics_Gdi",
     # 새 버전 확인(Windows 내장 WinHTTP, src/win/update.rs)
     "Win32_Networking_WinHttp",
