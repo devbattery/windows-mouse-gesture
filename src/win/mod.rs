@@ -370,8 +370,9 @@ fn respond(request: Request, events: &SyncSender<worker::Event>, settings_path: 
                 "hookP99Micros": p99,
                 "hookOver10ms": snapshot.count() > 0 && p99.is_none(),
                 "reinstalls": hook::REINSTALLS.load(Ordering::Relaxed),
-                // 설정 반영 번호. 설정 창이 다른 곳(트레이 메뉴 등)에서 바뀐 설정을 알아채는 데 쓴다.
-                "settingsRevision": shared::SETTINGS_REVISION.load(Ordering::SeqCst),
+                // 지금 설정 내용의 지문. 설정 창이 다른 곳(트레이 메뉴 등)에서 바뀐 설정을 알아채는 데 쓴다.
+                // 내용 기준이라 코어를 다시 시작해도 내용이 같으면 값이 같다.
+                "settingsFingerprint": shared::settings().fingerprint(),
                 "settingsPath": settings_path,
                 // 새 버전 확인 결과(지금보다 새 버전이 있을 때만 값이 있다)
                 "update": {

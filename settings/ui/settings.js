@@ -435,8 +435,11 @@ function showSettingsError(message) {
   $("#settings-error").textContent = message ? `설정 파일 오류: ${message} (이전 설정으로 동작 중)` : "";
 }
 
-// 화면이 읽은 설정의 반영 번호(코어 상태의 settingsRevision). 이전 코어에는 없어서 undefined일 수 있다.
-let settingsRevision;
+// 화면이 읽은 설정 내용의 지문(코어 상태의 settingsFingerprint). 이전 코어에는 없어서 undefined일 수 있다.
+// 내용 기준이라 코어를 다시 시작해도 내용이 같으면 같은 값이다(재시작만으로는 "바뀜"으로 보지 않는다).
+let settingsFingerprint;
+// 덮어쓰기 경고를 띄운 상태인지(다른 곳의 변경이 되돌려지면 경고를 거둔다)
+let externalChangeWarned = false;
 
 async function refreshStatus() {
   try {
@@ -448,12 +451,22 @@ async function refreshStatus() {
     }
     // 다른 곳(트레이 메뉴·설정 파일 직접 수정)에서 설정이 바뀌었으면 다시 읽는다. 이 화면에 저장하지 않은 변경이
     // 있으면 덮어쓰지 않고, 지금 저장하면 그 변경을 덮어쓴다고 알린다.
-    const revision = core.status?.settingsRevision;
-    if (revision === undefined || settingsRevision === undefined || revision === settingsRevision) return;
+    const fingerprint = core.status?.settingsFingerprint;
+    if (fingerprint === undefined || settingsFingerprint === undefined) return;
+    if (fingerprint === settingsFingerprint) {
+      // 다른 곳의 변경이 원래대로 돌아왔으면 경고를 거두고 평소 안내로 돌린다.
+      if (externalChangeWarned) {
+        externalChangeWarned = false;
+        if (isDirty()) dirty();
+      }
+      return;
+    }
     if (!isDirty()) {
+      externalChangeWarned = false;
       await load();
       status("다른 곳(트레이 메뉴 등)에서 바뀐 설정을 다시 읽었습니다.");
     } else {
+      externalChangeWarned = true;
       status("다른 곳(트레이 메뉴 등)에서 설정이 바뀌었습니다. 지금 저장하면 그 변경을 덮어씁니다.", true);
     }
   } catch {}
@@ -825,8 +838,9 @@ $("#save").addEventListener("click", async () => {
     $("#save").disabled = true;
     await invoke("save", { settings: { schemaVersion: 1, enabled: settings.enabled, threshold: settings.threshold, rules, windows: settings.windows } });
     $("#save").dataset.dirty = "false";
-    // 방금 저장한 것도 반영 번호를 올리므로, 새 번호를 받아 두어 자기 저장을 "다른 곳의 변경"으로 보지 않게 한다.
-    settingsRevision = (await invoke("status").catch(() => ({})))?.status?.settingsRevision;
+    // 방금 저장한 내용의 지문을 받아 두어 자기 저장을 "다른 곳의 변경"으로 보지 않게 한다.
+    settingsFingerprint = (await invoke("status").catch(() => ({})))?.status?.settingsFingerprint;
+    externalChangeWarned = false;
     clearBackupStatus();
     checkupStatus("");
     showSettingsError("");
@@ -860,7 +874,8 @@ async function load() {
   applyCatalog(data.catalog);
   suggestedExclusions = data.suggestedExclusions ?? [];
   settings = data.settings;
-  settingsRevision = data.core?.status?.settingsRevision;
+  settingsFingerprint = data.core?.status?.settingsFingerprint;
+  externalChangeWarned = false;
   renderCore(data.core);
   showSettingsError(data.settingsError);
   $("#about-version").textContent = `Glide ${data.version}`;

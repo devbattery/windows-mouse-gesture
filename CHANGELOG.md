@@ -3,6 +3,14 @@
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)을 씁니다.
 릴리스 작업(`.github/workflows/release.yml`)이 해당 버전 절을 GitHub Release 노트로 씁니다.
 
+## [0.5.7] - 2026-11-15
+
+### 고침
+
+- 설정 창에서 저장하지 않은 변경이 있는 채로 Glide를 껐다 켜면, 실제로 바뀐 것이 없어도 "다른 곳에서 설정이
+  바뀌었습니다" 경고가 뜨던 문제. 설정이 바뀌었는지를 반영 횟수 대신 설정 내용의 지문으로 판단합니다. 같은 값으로
+  다시 저장한 경우에도 경고하지 않습니다.
+
 ## [0.5.6] - 2026-11-15
 
 ### 추가
@@ -136,6 +144,7 @@
 
 - 전역 마우스 훅과 제스처 인식(크롬 확장 Glide와 같은 규칙), 단순 우클릭 다시 보내기, 길게 누르기 통과.
 
+[0.5.7]: https://github.com/devbattery/windows-mouse-gesture/releases/tag/v0.5.7
 [0.5.6]: https://github.com/devbattery/windows-mouse-gesture/releases/tag/v0.5.6
 [0.5.5]: https://github.com/devbattery/windows-mouse-gesture/releases/tag/v0.5.5
 [0.5.4]: https://github.com/devbattery/windows-mouse-gesture/releases/tag/v0.5.4

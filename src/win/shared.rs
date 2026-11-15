@@ -3,7 +3,7 @@
 //! 훅 스레드는 잠금 없이 읽어야 하므로 원자 값만 쓴다. 규칙 목록처럼 큰 값은 워커·UI 스레드만
 //! 읽으며, `RwLock<Arc<_>>` 스냅샷을 짧게 복제해 쓴다.
 
-use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, Ordering};
 use std::sync::{Arc, LazyLock, Mutex, RwLock};
 
 use glide_core::history::{Entry, History};
@@ -76,10 +76,6 @@ pub const WM_UI_EXIT: u32 = WM_APP + 11;
 /// 트레이 아이콘 알림
 pub const WM_UI_TRAY: u32 = WM_APP + 12;
 
-/// 설정을 반영할 때마다 1씩 오르는 번호(설정 창 저장·트레이 메뉴·파일 직접 수정 모두). 설정 창은 이 값이 바뀌면
-/// 다른 곳에서 설정이 바뀐 것으로 보고 다시 읽는다(열린 설정 창이 옛 값으로 덮어쓰지 않게).
-pub static SETTINGS_REVISION: AtomicU64 = AtomicU64::new(0);
-
 static SETTINGS: LazyLock<RwLock<Arc<Settings>>> =
     LazyLock::new(|| RwLock::new(Arc::new(Settings::default())));
 
@@ -136,7 +132,6 @@ pub fn publish(settings: Settings) {
         FULLSCREEN_PAUSED.store(false, Ordering::SeqCst);
     }
     let snapshot = Arc::new(settings);
-    SETTINGS_REVISION.fetch_add(1, Ordering::SeqCst);
     match SETTINGS.write() {
         Ok(mut guard) => *guard = snapshot,
         Err(poisoned) => *poisoned.into_inner() = snapshot,

@@ -298,6 +298,19 @@ impl Settings {
         self.excluded_processes.contains(&name)
     }
 
+    /// 설정 내용의 지문(16자리 16진수). 같은 내용이면 코어를 다시 시작해도 같은 값이다.
+    /// 설정 창이 "다른 곳(트레이 메뉴·파일 직접 수정)에서 설정이 바뀌었는지"를 판단하는 데 쓴다.
+    /// 저장 형식(`to_json`, 키가 정렬된 JSON)에 FNV-1a 64비트 해시를 적용한다. 보안용이 아니라 변경 감지용이다.
+    /// JS 숫자는 2^53을 넘으면 정확하지 않으므로 문자열로 돌려준다.
+    pub fn fingerprint(&self) -> String {
+        const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+        const PRIME: u64 = 0x0000_0100_0000_01b3;
+        let hash = self.to_json().bytes().fold(OFFSET, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(PRIME)
+        });
+        format!("{hash:016x}")
+    }
+
     /// 예외 목록에 앱을 넣거나(없을 때) 뺀(있을 때) 새 설정. 트레이 메뉴에서 쓴다.
     /// 결과는 설정 파일 형식으로 바꿔 `validate`로 다시 검증하므로, 이름 형식·개수 한도가 설정 창 저장과 같다.
     /// 돌려주는 bool은 넣었으면 true, 뺐으면 false다.
@@ -320,6 +333,24 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fingerprint_follows_content_only() {
+        let settings = Settings::default();
+        let fingerprint = settings.fingerprint();
+        assert_eq!(fingerprint.len(), 16);
+        // 같은 내용(다시 읽은 설정 = 코어 재시작)이면 같은 지문
+        assert_eq!(
+            parse(&settings.to_json()).unwrap().fingerprint(),
+            fingerprint
+        );
+        // 내용이 바뀌면 다른 지문
+        let (changed, _) = settings.toggle_exclusion("game.exe").unwrap();
+        assert_ne!(changed.fingerprint(), fingerprint);
+        // 넣었다 빼서 원래 내용으로 돌아오면 원래 지문
+        let (restored, _) = changed.toggle_exclusion("game.exe").unwrap();
+        assert_eq!(restored.fingerprint(), fingerprint);
+    }
 
     #[test]
     fn toggle_exclusion_adds_removes_and_validates() {
