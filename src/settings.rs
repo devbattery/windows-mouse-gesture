@@ -59,18 +59,25 @@ pub struct Settings {
     pub check_updates: bool,
 }
 
-/// 확장의 기본 제스처 10종(`shared.js` defaults.rules)과 같다.
-const DEFAULT_RULES: [(&str, &str); 10] = [
-    ("L", "back"),
-    ("R", "forward"),
-    ("D", "newTab"),
-    ("DR", "closeTab"),
-    ("UD", "reload"),
-    ("DU", "restoreTab"),
-    ("UL", "previousTab"),
-    ("UR", "nextTab"),
-    ("U", "scrollTop"),
-    ("DL", "scrollBottom"),
+/// Windows판 기본 제스처 15종: (방향, 동작, 키보드 동작의 단축키).
+/// 설정 파일이 없는 PC(새로 설치)와 설정 창의 "기본값으로 되돌리기"가 이 목록을 쓴다.
+/// 확장(`shared.js` defaults.rules, 10종)과는 다르다. 설정 창은 확장 사본 대신 코어가 넘기는 `defaults`를 쓴다.
+const DEFAULT_RULES: [(&str, &str, Option<&str>); 15] = [
+    ("L", "back", None),
+    ("R", "forward", None),
+    ("D", "scrollBottom", None),
+    ("DR", "closeTab", None),
+    ("UD", "reload", None),
+    ("LU", "keyboard", Some("F")),
+    ("UL", "previousTab", None),
+    ("UR", "nextTab", None),
+    ("U", "scrollTop", None),
+    ("RU", "keyboard", Some("Ctrl+T")),
+    ("RD", "keyboard", Some("Ctrl+N")),
+    ("DU", "keyboard", Some("Ctrl+R")),
+    ("LR", "keyboard", Some("Ctrl+Shift+R")),
+    ("RL", "keyboard", Some("Ctrl+Shift+R")),
+    ("LD", "keyboard", Some("Ctrl+Shift+T")),
 ];
 
 impl Default for Settings {
@@ -80,10 +87,14 @@ impl Default for Settings {
             threshold: DEFAULT_THRESHOLD,
             rules: DEFAULT_RULES
                 .iter()
-                .map(|(gesture, action)| Rule {
+                .map(|(gesture, action, shortcut)| Rule {
                     gesture: (*gesture).into(),
                     action: (*action).into(),
-                    shortcut: None,
+                    // 상수 목록이므로 파싱 실패는 프로그래밍 오류다(defaults_round_trip 테스트가 확인).
+                    shortcut: shortcut.map(|text| {
+                        shortcut::parse(text)
+                            .expect("기본 제스처의 단축키 표기가 올바르지 않습니다")
+                    }),
                 })
                 .collect(),
             hold_ms: DEFAULT_HOLD_MS,
@@ -371,7 +382,37 @@ mod tests {
     fn defaults_round_trip() {
         let defaults = Settings::default();
         assert_eq!(parse(&defaults.to_json()).unwrap(), defaults);
-        assert_eq!(defaults.rules.len(), 10);
+        assert_eq!(defaults.rules.len(), 15);
+    }
+
+    #[test]
+    fn default_rules_pass_validation_and_keep_shortcut_text() {
+        // 설정 창·백업 파일과 같은 검증(validate_rules)을 통과해야 한다(중복 방향, 단축키 형식 등).
+        let defaults = Settings::default();
+        let value = defaults.to_value();
+        let rules = validate_rules(&value["rules"]).unwrap();
+        assert_eq!(rules, defaults.rules);
+        // 키보드 동작은 저장할 때 단축키 표기가 그대로 남는다.
+        let keyboard: Vec<(&str, &str)> = defaults
+            .rules
+            .iter()
+            .filter_map(|rule| {
+                let shortcut = rule.shortcut.as_ref()?;
+                Some((rule.gesture.as_str(), shortcut.text.as_str()))
+            })
+            .collect();
+        assert_eq!(
+            keyboard,
+            [
+                ("LU", "F"),
+                ("RU", "Ctrl+T"),
+                ("RD", "Ctrl+N"),
+                ("DU", "Ctrl+R"),
+                ("LR", "Ctrl+Shift+R"),
+                ("RL", "Ctrl+Shift+R"),
+                ("LD", "Ctrl+Shift+T"),
+            ]
+        );
     }
 
     #[test]

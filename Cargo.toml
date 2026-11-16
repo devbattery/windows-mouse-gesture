@@ -5,7 +5,7 @@ members = [".", "settings"]
 
 [package]
 name = "glide-core"
-version = "0.6.1"
+version = "0.6.2"
 edition = "2024"
 rust-version = "1.85"
 description = "Glide for Windows: 모든 Windows 앱에서 쓰는 우클릭 마우스 제스처"
