@@ -1,4 +1,4 @@
-# v<버전> 태그를 push하면 검사 → 패키지 → (설정돼 있으면) SignPath 코드 서명 → zip·SHA256SUMS → GitHub Release.
+# v<버전> 태그를 push하면 검사 → 패키지 → (설정돼 있으면) SignPath 코드 서명 → 설치 프로그램·SHA256SUMS → 설치 확인 → GitHub Release.
 # SignPath 단계는 저장소 변수 SIGNPATH_ORGANIZATION_ID가 있을 때만 실행한다(docs/signing.md).
 name: Release
 
@@ -37,6 +37,10 @@ jobs:
       # 릴리스는 캐시를 쓰지 않고 매번 깨끗하게 빌드한다(캐시 오염이 배포물에 들어가지 않도록).
       - name: 라이선스 고지 도구 설치
         run: cargo install cargo-about --version 0.9.3 --locked --features cli
+
+      # 설치 프로그램 컴파일러. 서명 요청 전에 준비해, 여기서 실패해도 서명 요청이 버려지지 않게 한다.
+      - name: Inno Setup 7 설치
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/install-inno-setup.ps1
 
       # 단계를 나눠 두면 로그를 열지 않아도 어느 검사가 실패했는지 단계 이름으로 보인다.
       - name: 서식 검사
@@ -83,8 +87,20 @@ jobs:
             Copy-Item -LiteralPath $signed -Destination (Join-Path $bin $name) -Force
           }
 
-      - name: zip·SHA256SUMS 만들기
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/archive.ps1
+      - name: 설치 프로그램·SHA256SUMS 만들기
+        run: |
+          $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'tools/build-installer.ps1')
+          if ($env:SIGNPATH_ENABLED -eq 'true') { $arguments += '-Signed' }
+          powershell @arguments
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      # 배포할 바로 그 설치 프로그램으로 설치·다시 설치·제거를 해 본다.
+      - name: 설치 프로그램 확인(설치·업데이트·제거)
+        run: |
+          $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'tools/test-installer.ps1')
+          if ($env:SIGNPATH_ENABLED -eq 'true') { $arguments += '-Signed' }
+          powershell @arguments
+          if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: 릴리스 노트 만들기
         run: |
@@ -93,31 +109,32 @@ jobs:
           $match = [regex]::Match($changelog, $pattern)
           if (-not $match.Success) { throw "CHANGELOG.md에 $env:VERSION 절이 없습니다." }
           $signing = if ($env:SIGNPATH_ENABLED -eq 'true') {
-            'SignPath Foundation 인증서로 서명(SignPath.io 무료 코드 서명)'
+            '실행 파일은 SignPath Foundation 인증서로 서명(SignPath.io 무료 코드 서명). 설치 프로그램은 서명 없음.'
           } else {
-            '서명 없음. install.cmd가 설치할 때 이 PC 전용 인증서로 코어에만 서명합니다(README 참고).'
+            '서명 없음. 설치 프로그램이 설치할 때 이 PC 전용 인증서로 코어에만 서명합니다(README 참고).'
           }
           $hash = (Get-Content dist/SHA256SUMS.txt -First 1).Split(' ')[0]
           $rustc = rustc --version
+          $inno = 'Inno Setup 7.1.1'
           @(
             $match.Groups[1].Value.Trim()
             ''
             '## 설치'
             ''
-            "1. 아래 Assets의 ``glide-windows-$env:VERSION.zip``을 받아 압축을 풉니다."
-            '2. 압축을 푼 폴더의 `install.cmd`를 실행합니다(UAC 확인 1회).'
-            '3. 제거는 설정 → 앱 → 설치된 앱의 **Glide for Windows** 또는 같은 폴더의 `uninstall.cmd`입니다.'
+            "1. 아래 Assets의 ``GlideSetup-$env:VERSION.exe``를 받아 실행합니다(UAC 확인 1회)."
+            '2. 업데이트도 같은 방법입니다. 0.5.x를 `install.cmd`로 설치했다면 그대로 설치하면 이전 등록·인증서·자동 시작을 정리합니다.'
+            '3. 제거는 설정 → 앱 → 설치된 앱의 **Glide for Windows**입니다.'
             ''
             $(if ($env:SIGNPATH_ENABLED -eq 'true') { '' } else {
-              '> Windows 11의 스마트 앱 컨트롤이 켜져 있으면 서명 전인 이 판은 실행되지 않습니다. 설치 스크립트가 미리 확인해 멈추고 안내합니다(README "스마트 앱 컨트롤").'
+              '> Windows 11의 스마트 앱 컨트롤이 켜져 있으면 서명 전인 이 판은 실행되지 않습니다. 설치 프로그램이 미리 확인해 멈추고 안내합니다(README "스마트 앱 컨트롤").'
             })
             ''
             '## 빌드 정보'
             ''
             "- 커밋: ``$env:GITHUB_SHA``"
-            "- 컴파일러: ``$rustc``"
+            "- 컴파일러: ``$rustc``, $inno"
             "- 코드 서명: $signing"
-            "- SHA-256(zip): ``$hash``"
+            "- SHA-256(GlideSetup-$env:VERSION.exe): ``$hash``"
           ) -join "`n" | Set-Content -LiteralPath release-notes.md -Encoding utf8
 
       - name: GitHub Release 만들기
@@ -125,6 +142,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create $env:GITHUB_REF_NAME `
-            "dist/glide-windows-$env:VERSION.zip" dist/SHA256SUMS.txt `
+            "dist/GlideSetup-$env:VERSION.exe" dist/SHA256SUMS.txt `
             --title "Glide for Windows $env:VERSION" --notes-file release-notes.md --verify-tag
           if ($LASTEXITCODE -ne 0) { exit 1 }

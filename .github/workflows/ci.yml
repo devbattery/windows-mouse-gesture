@@ -57,3 +57,22 @@ jobs:
 
       - name: 설치 패키지 만들기(uiAccess 매니페스트 확인 포함)
         run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/package.ps1
+
+      # 설치 프로그램 컴파일러. 러너 이미지에는 Inno Setup 6만 있어 고정한 7.1.1을 받아 SHA-256을 확인한 뒤 설치한다.
+      - name: Inno Setup 7 설치
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/install-inno-setup.ps1
+
+      - name: 설치 프로그램 만들기
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-installer.ps1
+
+      # 러너에 실제로 설치·다시 설치·제거를 해 보고 인증서·등록·자동 시작이 맞게 정리되는지 확인한다.
+      - name: 설치 프로그램 확인(설치·업데이트·제거)
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-installer.ps1
+
+      - name: 설치 로그 올리기(실패했을 때)
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: installer-test-logs
+          path: dist/installer-test-logs/
+          if-no-files-found: ignore
