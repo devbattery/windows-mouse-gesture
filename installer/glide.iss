@@ -150,7 +150,9 @@ Type: dirifempty; Name: "{app}"
 
 [Run]
 ; postinstall 항목은 원래 사용자(관리자 권한이 아닌) 권한으로 실행된다. 그래야 일반 권한 + uiAccess로 시작된다.
-Filename: "{app}\glide-core.exe"; Description: "{cm:LaunchGlide}"; Flags: postinstall nowait; Check: ShouldLaunch
+; shellexec 필수: uiAccess 실행 파일은 CreateProcess로 시작하면 ERROR_ELEVATION_REQUIRED(740)로 거부되고,
+; 셸(ShellExecute → AppInfo 서비스)을 거쳐야 시작된다. shellexec는 기본으로 끝날 때까지 기다리지 않는다.
+Filename: "{app}\glide-core.exe"; Description: "{cm:LaunchGlide}"; Flags: postinstall shellexec; Check: ShouldLaunch
 
 [Code]
 const
