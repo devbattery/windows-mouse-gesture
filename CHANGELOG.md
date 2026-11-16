@@ -3,6 +3,15 @@
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)을 씁니다.
 릴리스 작업(`.github/workflows/release.yml`)이 해당 버전 절을 GitHub Release 노트로 씁니다.
 
+## [0.6.1] - 2026-11-16
+
+### 고침
+
+- 설치를 마치고 Glide를 바로 시작할 때 "파일을 실행할 수 없습니다 … CreateProcess 실패; 코드 740"이 뜨고 Glide가
+  시작되지 않던 문제(관리자 권한 창 지원을 켠 경우). 관리자 권한 창 지원판(uiAccess)은 셸을 거쳐 시작해야 하는데
+  설치 프로그램이 `CreateProcess`로 직접 시작하고 있었습니다. 이미 0.6.0을 설치했다면 설치는 정상이므로,
+  시작 메뉴 "Glide 설정"의 **Glide 시작** 버튼을 누르거나 다시 로그인하면 Glide가 시작됩니다.
+
 ## [0.6.0] - 2026-11-16
 
 ### 바뀜
