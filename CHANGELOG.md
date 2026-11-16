@@ -3,6 +3,28 @@
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)을 씁니다.
 릴리스 작업(`.github/workflows/release.yml`)이 해당 버전 절을 GitHub Release 노트로 씁니다.
 
+## [0.6.0] - 2026-11-16
+
+### 바뀜
+
+- 설치 방식을 **설치 프로그램**(`GlideSetup-<버전>.exe`, Inno Setup 7)으로 바꿨습니다. zip을 받아 압축을 풀고
+  `install.cmd`를 실행하던 방식과 `install.ps1`·`uninstall.ps1`은 없어졌습니다.
+  - 받은 파일을 실행하면 UAC 확인 1회로 설치됩니다. 관리자 권한 창 지원(이 PC 전용 인증서)과 자동 시작은
+    설치 화면의 "추가 설정"에서 고릅니다(기본은 둘 다 켬).
+  - 0.5.x를 `install.cmd`로 설치했던 PC는 그대로 설치하면 됩니다. 이전 "앱 및 기능" 등록·인증서·자동 시작·바로 가기를 정리합니다.
+  - 관리자 권한 창 지원판을 서명하지 못하면, 설치를 실패로 끝내지 않고 관리자 창 미지원판으로 바꿔 설치한 뒤 알립니다.
+  - 조용한 설치(`/VERYSILENT`)와 설치 기록(`/LOG`)을 지원합니다. `-NoUiAccess`·`-NoAutoStart`·`-SkipSmartAppControlCheck`는
+    `/MERGETASKS="!uiaccess"`·`/MERGETASKS="!autostart"`·`/SKIPSACCHECK`가 됐습니다. 0.5.x를 `-NoUiAccess`·`-NoAutoStart`로
+    설치했던 PC는 처음 넘어올 때 그 선택을 기본값으로 이어받습니다.
+  - 미리보기 옵션 `-DryRun`은 없어졌습니다. 설치 화면의 "설치 준비 완료" 단계에서 고른 설정을 확인한 뒤 진행하고,
+    하는 일은 [installer/glide.iss](installer/glide.iss)·[installer/glide-setup.ps1](installer/glide-setup.ps1)에서 볼 수 있습니다.
+- 로그인 시 자동 시작을 현재 사용자(`HKCU\...\Run`) 대신 **이 PC의 모든 사용자**(`HKLM\...\Run`)에 등록합니다.
+  관리자 권한으로 실행되는 설치 프로그램이 HKCU에 쓰면, UAC에 다른 관리자 계정을 입력했을 때 그 계정에 등록되기 때문입니다.
+- 시작 메뉴 "Glide 설정" 바로 가기를 모든 사용자 시작 메뉴에 만듭니다.
+- CI가 설치 프로그램을 만들고, 러너에서 설치·다시 설치·제거를 실제로 해 보며 인증서·등록·자동 시작이 맞게 정리되는지 확인합니다.
+  릴리스는 배포할 바로 그 설치 프로그램으로 같은 확인을 거칩니다.
+- 소스에서 빌드해 설치하려면 Inno Setup 7.1.1 이상이 필요합니다(`winget install --id JRSoftware.InnoSetup.7 -e`).
+
 ## [0.5.7] - 2026-11-15
 
 ### 고침
@@ -144,6 +166,7 @@
 
 - 전역 마우스 훅과 제스처 인식(크롬 확장 Glide와 같은 규칙), 단순 우클릭 다시 보내기, 길게 누르기 통과.
 
+[0.6.0]: https://github.com/devbattery/windows-mouse-gesture/releases/tag/v0.6.0
 [0.5.7]: https://github.com/devbattery/windows-mouse-gesture/releases/tag/v0.5.7
 [0.5.6]: https://github.com/devbattery/windows-mouse-gesture/releases/tag/v0.5.6
 [0.5.5]: https://github.com/devbattery/windows-mouse-gesture/releases/tag/v0.5.5

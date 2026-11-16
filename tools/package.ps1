@@ -1,14 +1,15 @@
 ﻿<#
 .SYNOPSIS
-  Glide for Windows 설치 패키지(dist\glide-windows-<버전>\)를 만든다.
+  Glide for Windows 설치 프로그램에 넣을 파일(dist\glide-windows-<버전>\)을 만든다.
 
 .DESCRIPTION
   1. 일반 빌드: glide-core.exe(관리자 창 미지원판), glide-settings.exe
   2. uiAccess 빌드: glide-core-uiaccess.exe(관리자 창 지원판, 설치 때 서명)
-  3. 설치·제거 스크립트와 LICENSE를 함께 복사하고, uiAccess 매니페스트가 실제로 들어갔는지 mt.exe로 확인한다.
+  3. LICENSE와 의존 라이브러리 라이선스 고지를 함께 두고, uiAccess 매니페스트가 실제로 들어갔는지 mt.exe로 확인한다.
 
-  이 스크립트는 빌드와 파일 복사만 한다. 인증서·서명·Program Files 설치는 installer\install.ps1이,
-  배포용 zip과 SHA256SUMS.txt는 tools\archive.ps1이 만든다(그 사이에 CI가 코드 서명을 넣을 수 있다).
+  이 스크립트는 빌드와 파일 복사만 한다. 설치 프로그램(dist\GlideSetup-<버전>.exe)과 SHA256SUMS.txt는
+  tools\build-installer.ps1이 만든다(그 사이에 CI가 코드 서명을 넣을 수 있다). 인증서·서명·Program Files 설치는
+  설치 프로그램(installer\glide.iss, installer\glide-setup.ps1)이 한다.
 
 .EXAMPLE
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\package.ps1
@@ -36,7 +37,7 @@ if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
 Rust(cargo)를 찾지 못했습니다. 소스에서 빌드하려면 다음을 설치한 뒤 새 터미널에서 다시 실행해 주세요.
   winget install --id Rustlang.Rustup
   winget install --id Microsoft.VisualStudio.2022.BuildTools --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
-빌드 없이 설치만 하려면 GitHub Releases의 glide-windows-<버전>.zip을 받아 install.cmd를 실행하면 됩니다.
+빌드 없이 설치만 하려면 GitHub Releases의 GlideSetup-<버전>.exe를 받아 실행하면 됩니다.
 '@
     exit 1
 }
@@ -52,11 +53,8 @@ $bin = New-Item -ItemType Directory -Force (Join-Path $output 'bin')
 Copy-Item (Join-Path $root 'target\release\glide-core.exe') $bin
 Copy-Item (Join-Path $root 'target\release\glide-settings.exe') $bin
 Copy-Item (Join-Path $root 'target\uiaccess\release\glide-core.exe') (Join-Path $bin 'glide-core-uiaccess.exe')
-Copy-Item (Join-Path $root 'installer\*') $output
 # MIT 라이선스는 배포물에 저작권·허가 문구를 함께 넣어야 한다.
 Copy-Item (Join-Path $root 'LICENSE') (Join-Path $output 'LICENSE.txt')
-# 설치 스크립트가 install.json·"앱 및 기능"에 기록할 버전(PowerShell에서 실행 파일 자원을 읽지 않고 쓰도록)
-Set-Content -LiteralPath (Join-Path $output 'version.txt') -Value $version -Encoding ASCII
 
 # 의존 라이브러리 라이선스 고지(THIRD-PARTY-NOTICES.txt). 설정은 about.toml, 템플릿은 tools\about.hbs.
 # 허용 목록 밖의 라이선스가 있거나 라이선스를 판별하지 못하면 --fail로 멈춘다.
@@ -71,7 +69,7 @@ if (Get-Command cargo-about -ErrorAction SilentlyContinue) {
     throw 'cargo-about을 찾지 못했습니다(cargo install cargo-about --version 0.9.3 --locked --features cli).'
 } else {
     # 소스에서 직접 빌드해 이 PC에만 설치하는 경우는 막지 않는다.
-    Write-Warning 'cargo-about이 없어 THIRD-PARTY-NOTICES.txt를 만들지 않았습니다(배포 zip을 만들 때는 필요).'
+    Write-Warning 'cargo-about이 없어 THIRD-PARTY-NOTICES.txt를 만들지 않았습니다(배포용 설치 프로그램을 만들 때는 필요).'
 }
 
 # uiAccess판에만 uiAccess="true"가 들어갔는지 확인한다(Windows SDK의 mt.exe).

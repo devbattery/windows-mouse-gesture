@@ -3,7 +3,7 @@
 크롬 확장 **Glide**의 우클릭 마우스 제스처를 모든 Windows 10/11 앱에서 쓰기 위한 상주 프로그램입니다.
 
 > **현재 단계: M5 공개 배포.** 트레이에 상주하는 코어(`glide-core.exe`)와 설정 창(`glide-settings.exe`, Tauri)으로
-> 이루어집니다. [Releases](https://github.com/devbattery/windows-mouse-gesture/releases)의 zip을 받아 설치하면
+> 이루어집니다. [Releases](https://github.com/devbattery/windows-mouse-gesture/releases)의 설치 프로그램으로 설치하면
 > 관리자 권한 창(작업 관리자 등) 위에서도 제스처가 동작합니다. 실제 마우스로 할 확인 항목은
 > [최종 시험 순서](#최종-시험-순서)에 모았습니다. 변경 내용은 [CHANGELOG](CHANGELOG.md)에 있습니다.
 
@@ -28,60 +28,73 @@
 
 요구 사항: Windows 10 22H2 또는 Windows 11(x64). 설정 창에 WebView2 런타임이 필요합니다(Windows 11과 최신 Windows 10에는 기본 포함).
 
-1. [Releases](https://github.com/devbattery/windows-mouse-gesture/releases)에서 `glide-windows-<버전>.zip`을 받습니다.
-   같은 곳의 `SHA256SUMS.txt`와 비교하려면 PowerShell에서 `(Get-FileHash glide-windows-<버전>.zip).Hash.ToLower()`를 실행합니다
+1. [Releases](https://github.com/devbattery/windows-mouse-gesture/releases)에서 `GlideSetup-<버전>.exe`를 받습니다.
+   같은 곳의 `SHA256SUMS.txt`와 비교하려면 PowerShell에서 `(Get-FileHash GlideSetup-<버전>.exe).Hash.ToLower()`를 실행합니다
    (`Get-FileHash`는 대문자로 출력하고 `SHA256SUMS.txt`는 소문자입니다).
-2. zip을 **압축 해제**합니다. zip 안에서 바로 실행하면 파일이 없어서 설치가 멈춥니다.
-3. 압축을 푼 폴더의 `install.cmd`를 실행합니다. UAC 확인 창이 한 번 뜹니다.
+2. 받은 파일을 실행합니다. UAC 확인 창이 한 번 뜹니다.
+3. "추가 설정" 두 가지(기본은 둘 다 켬)를 확인하고 설치합니다. 마지막 화면의 **Glide 시작**을 켜 두면 바로 트레이에 나타납니다.
 
 **경고 창이 뜰 때.** 아직 코드 서명 전이라 다음 창이 뜰 수 있습니다([코드 서명 계획](docs/signing.md)).
 
 - 브라우저: "흔히 다운로드되지 않는 파일" → **유지**
-- `install.cmd` 실행: "이 파일을 실행하시겠습니까?" → **실행**
 - "Windows의 PC 보호" → **추가 정보 → 실행**
 
-설치가 끝나면 설치한 파일의 다운로드 표시를 지우므로, 이후 실행할 때는 경고가 뜨지 않습니다.
+설치 프로그램이 풀어 놓은 파일에는 다운로드 표시가 붙지 않으므로, 설치한 뒤에는 실행할 때 경고가 뜨지 않습니다.
 
-`install.ps1`이 하는 일(스크립트를 열어 직접 확인할 수 있습니다):
+설치 프로그램이 하는 일(스크립트 [installer/glide.iss](installer/glide.iss), [installer/glide-setup.ps1](installer/glide-setup.ps1)에서 직접 확인할 수 있습니다):
 
-1. 일반 권한: [스마트 앱 컨트롤](#스마트-앱-컨트롤)이 막을 판이면 아무것도 바꾸지 않고 멈춥니다.
-   설치 폴더에서 실행 중인 Glide를 종료합니다. 다른 위치에서 실행 중이면 멈추고 안내합니다.
-2. 관리자 권한(UAC 1회)
-   - `C:\Program Files\Glide\`에 실행 파일과 제거 스크립트를 복사합니다.
-   - 복사한 파일의 다운로드 표시(Zone.Identifier)를 지웁니다.
+1. [스마트 앱 컨트롤](#스마트-앱-컨트롤)이 막을 판이면 아무것도 바꾸지 않고 멈춥니다.
+2. 설치 폴더에서 실행 중인 Glide를 종료합니다. 다른 위치에서 실행 중이면 멈추고 안내합니다.
+3. `C:\Program Files\Glide\`에 실행 파일을 복사합니다. 관리자 권한 창 지원 조건 때문에 폴더는 바꿀 수 없습니다.
+4. **관리자 권한 창에서도 제스처 사용**(기본 켬)
    - **이 PC 전용 코드 서명 인증서**를 만들어 `glide-core.exe`에만 서명합니다. 공개 인증서만 로컬 컴퓨터의 신뢰 루트에 등록하고 **개인키는 바로 지웁니다**. 그래서 이후에는 누구도 이 인증서로 다른 프로그램에 서명할 수 없습니다.
-   - 패키지의 실행 파일이 이미 SignPath Foundation 인증서로 서명돼 있으면(정식 서명 릴리스) 이 단계를 건너뜁니다.
+   - 실행 파일이 이미 SignPath Foundation 인증서로 서명돼 있으면(정식 서명 릴리스) 이 단계를 건너뜁니다.
    - 다시 설치하면 새 인증서로 바꾸고, 이전 인증서는 신뢰 루트에서 지웁니다.
-   - "설정 → 앱 → 설치된 앱"에 **Glide for Windows**로 등록합니다.
-3. 일반 권한: 로그인 시 자동 시작(`HKCU\...\Run`), 시작 메뉴 "Glide 설정" 바로 가기, Glide 시작.
+   - 서명하지 못하면 관리자 창 미지원판으로 바꿔 설치를 마치고 알려 줍니다.
+   - 끄면 인증서를 만들지 않고 관리자 창 미지원판을 설치합니다(이전 인증서는 지웁니다).
+5. **로그인할 때 자동으로 시작**(기본 켬): `HKLM\...\Run`에 등록합니다. 이 PC의 **모든 사용자**에게 적용됩니다.
+6. 모든 사용자 시작 메뉴에 "Glide 설정" 바로 가기를 만들고, "설정 → 앱 → 설치된 앱"에 **Glide for Windows**로 등록합니다.
+7. 0.5.x를 `install.cmd`로 설치했던 PC라면 그 등록·인증서·자동 시작(`HKCU\...\Run`)·바로 가기를 정리합니다. 따로 제거하지 않아도 됩니다.
+   그때 `-NoUiAccess`·`-NoAutoStart`로 설치했다면, 처음 넘어올 때 그 선택을 "추가 설정"의 기본값으로 이어받습니다.
+8. 마지막 화면의 **Glide 시작**은 관리자 권한이 아닌 원래 사용자 권한으로 Glide를 시작합니다.
 
-| 옵션 | 설명 |
+설치 기록은 `%TEMP%\Setup Log <날짜> #<번호>.txt`에 남습니다. 문제를 알려 줄 때 첨부해 주세요.
+
+**조용한 설치**(명령 프롬프트·PowerShell):
+
+```
+GlideSetup-<버전>.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+```
+
+| 추가 인자 | 설명 |
 | --- | --- |
-| `-NoUiAccess` | 인증서를 만들지 않고 관리자 창 미지원판을 설치 |
-| `-NoAutoStart` | 로그인 시 자동 시작하지 않음 |
-| `-DryRun` | 아무것도 바꾸지 않고 할 일만 출력 |
-| `-SkipSmartAppControlCheck` | 스마트 앱 컨트롤 확인을 건너뜀(판단이 틀렸다고 확신할 때만) |
+| `/MERGETASKS="!uiaccess"` | 인증서를 만들지 않고 관리자 창 미지원판을 설치 |
+| `/MERGETASKS="!autostart"` | 로그인 시 자동 시작하지 않음(둘 다 끄려면 `"!uiaccess,!autostart"`) |
+| `/NOLAUNCH` | 설치한 뒤 Glide를 시작하지 않음 |
+| `/SKIPSACCHECK` | 스마트 앱 컨트롤 확인을 건너뜀(판단이 틀렸다고 확신할 때만) |
+| `/LOG="경로"` | 설치 기록을 지정한 파일에 씀 |
 
-**업데이트:** 새 버전 zip을 받아 같은 방법으로 설치하면 덮어씁니다. 설정(`%APPDATA%\Glide`)은 그대로입니다.
+다시 설치할 때는 지난번에 고른 추가 설정을 그대로 씁니다.
+
+**업데이트:** 새 버전 설치 프로그램을 받아 실행하면 덮어씁니다. 설정(`%APPDATA%\Glide`)은 그대로입니다.
 0.5.4부터 Glide가 하루 한 번 GitHub에 최신 버전 번호를 물어보고, 새 버전이 있으면 트레이 알림을 띄웁니다
 (버전마다 한 번). 알림이나 트레이 메뉴의 **새 버전 받기**를 누르면 Release 페이지가 열립니다. 받기와 설치는
 직접 합니다. 서명 전이라 앱이 스스로 내려받아 설치하지는 않습니다.
 설정 창 **Glide 정보 → 새 버전 자동 확인**에서 끌 수 있고, 끄면 Glide는 인터넷에 접속하지 않습니다.
 `glide-core.exe --check-update`로 지금 바로 확인할 수도 있습니다.
 
-**제거:** "설정 → 앱 → 설치된 앱 → Glide for Windows → 제거"를 누르거나, 설치 폴더 또는 압축을 푼 폴더의
-`uninstall.cmd`를 실행합니다. 다음을 지웁니다.
+**제거:** "설정 → 앱 → 설치된 앱 → Glide for Windows → 제거"를 누릅니다(UAC 확인 1회). 다음을 지웁니다.
 
 - 인증서(지문과 주체 이름을 확인한 것만)
 - 설치 폴더, "앱 및 기능" 등록
 - 자동 시작, 바로 가기
 
-설정(`%APPDATA%\Glide`)은 남깁니다.
+설정(`%APPDATA%\Glide`)은 남깁니다. 조용히 제거하려면 `"C:\Program Files\Glide\unins000.exe" /VERYSILENT`를 실행합니다.
 
 > 자체 서명 uiAccess가 최신 Windows(특히 Windows 11 24H2)에서 거부된다는 보고가 있습니다. 설치 뒤 Glide가
-> 시작되지 않거나 트레이 상태 줄이 "관리자 권한 창: 지원 안 함"이면 `-NoUiAccess`로 다시 설치해 주세요.
-> 명령 프롬프트에서 압축을 푼 폴더로 이동한 뒤 `install.cmd -NoUiAccess`를 실행합니다.
-> 단, 아래의 스마트 앱 컨트롤이 켜져 있으면 `-NoUiAccess`로도 실행되지 않습니다.
+> 시작되지 않거나 트레이 상태 줄이 "관리자 권한 창: 지원 안 함"이면, 설치 프로그램을 다시 실행해
+> **관리자 권한 창에서도 제스처 사용**을 끄고 설치해 주세요.
+> 단, 아래의 스마트 앱 컨트롤이 켜져 있으면 그렇게 설치해도 실행되지 않습니다.
 
 ### 스마트 앱 컨트롤
 
@@ -89,32 +102,38 @@ Windows 11의 **스마트 앱 컨트롤**이 켜져 있으면(주로 Windows를 
 
 - 스마트 앱 컨트롤은 Microsoft 신뢰 루트 프로그램에 속한 인증 기관의 인증서로 서명했거나 Microsoft 평판이 있는 앱만
   실행합니다. 설치 스크립트가 만드는 이 PC 전용 인증서는 인정하지 않고, 설정 창(`glide-settings.exe`)은 서명이 없습니다.
-- 설치 스크립트는 시작할 때 이를 확인하고, 켜져 있으면 **아무것도 바꾸지 않고 멈춥니다**.
-  탐색기에서 `install.cmd`를 더블클릭하는 것부터 막힐 수도 있습니다.
+- 설치 프로그램은 시작할 때 이를 확인하고, 켜져 있으면 **아무것도 바꾸지 않고 멈춥니다**.
+  설치 프로그램 자체도 아직 서명이 없으므로, 실행하는 것부터 막힐 수도 있습니다.
 - 지금 쓰려면 "Windows 보안 → 앱 및 브라우저 컨트롤 → 스마트 앱 컨트롤 설정"에서 **끔**으로 바꾼 뒤 설치합니다.
   Windows 보호 기능 하나를 끄는 것이니 판단해서 선택해 주세요. 예전에는 한 번 끄면 Windows를 다시 설치해야 켤 수
   있었지만, 2026년 4월 업데이트 이후 빌드(24H2·25H2의 .8116 이상)는 다시 켤 수 있다고 알려져 있습니다.
 - 평가 모드(설정 화면의 "평가")에서는 막지 않으므로 그대로 설치하면 됩니다.
 - 근본 해결은 공식 코드 서명(SignPath Foundation)입니다([docs/signing.md](docs/signing.md)). 서명판이 나오면 이 절을 고칩니다.
-- 판단이 틀렸다고 확신할 때만 `install.cmd -SkipSmartAppControlCheck`로 확인을 건너뛸 수 있습니다.
+- 판단이 틀렸다고 확신할 때만 `GlideSetup-<버전>.exe /SKIPSACCHECK`로 확인을 건너뛸 수 있습니다.
 
 ### 소스에서 빌드해 설치
 
 ```powershell
 winget install --id Rustlang.Rustup
 winget install --id Microsoft.VisualStudio.2022.BuildTools --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+winget install --id JRSoftware.InnoSetup.7 -e   # 설치 프로그램 컴파일러(7.1.1 이상, 현재 사용자에게 설치)
 # 새 터미널에서
 git clone https://github.com/devbattery/windows-mouse-gesture.git
 cd windows-mouse-gesture
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\package.ps1   # dist\glide-windows-<버전>\ 생성
-dist\glide-windows-<버전>\install.cmd                                     # UAC 확인 1회
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\package.ps1           # dist\glide-windows-<버전>\ 생성
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\build-installer.ps1   # dist\GlideSetup-<버전>.exe 생성
+dist\GlideSetup-<버전>.exe                                                        # UAC 확인 1회
 ```
 
 - Build Tools의 "C++ 빌드 도구" 워크로드에는 MSVC 컴파일러와 Windows SDK가 들어 있습니다. SDK의 `rc.exe`·`mt.exe`가 필요합니다.
 - `package.ps1`은 `Cargo.lock`의 의존성 버전 그대로(`--locked`) 빌드합니다. Rust가 없으면 위 설치 방법을 안내하고 멈춥니다.
-- 배포용 zip은 `tools\archive.ps1`로 만듭니다(`dist\glide-windows-<버전>.zip`, `dist\SHA256SUMS.txt`).
-  zip에는 의존 라이브러리 라이선스 고지(`THIRD-PARTY-NOTICES.txt`)가 꼭 들어가야 해서 [cargo-about](https://github.com/EmbarkStudios/cargo-about)이 필요합니다
+- `build-installer.ps1`은 [Inno Setup 7](https://jrsoftware.org/isinfo.php)의 `ISCC.exe`로 설치 프로그램과 `dist\SHA256SUMS.txt`를 만듭니다.
+  `ISCC.exe`는 `-IsccPath` → 환경 변수 `INNO_SETUP_ISCC` → `%LOCALAPPDATA%\Programs\Inno Setup 7` → Program Files 순서로 찾고,
+  없으면 설치 방법을 안내하고 멈춥니다. 7.1.1보다 오래된 판이면 컴파일이 멈춥니다.
+- 배포용 설치 프로그램에는 의존 라이브러리 라이선스 고지(`THIRD-PARTY-NOTICES.txt`)가 꼭 들어가야 해서 [cargo-about](https://github.com/EmbarkStudios/cargo-about)이 필요합니다
   (`cargo install cargo-about --version 0.9.3 --locked --features cli`). 이 PC에 설치만 할 때는 없어도 경고만 하고 넘어갑니다.
+- `tools\test-installer.ps1`은 설치·다시 설치·제거를 실제로 해 보는 CI 전용 확인 스크립트입니다. 신뢰 루트와 Program Files를
+  바꾸므로 GitHub Actions 밖에서는 실행되지 않습니다.
 
 ## 설정 창
 
@@ -238,9 +257,10 @@ node tools/make-icon.cjs                                      # settings/icons/i
 **진단 정보 복사**(필요하면 "최근 앱 이름도 넣기")로 상황을 붙여 주세요.
 
 **0. 설치(M5 게이트: GitHub에서 받아 막힘없이 설치)**
-- [ ] 다른 PC에서 [Releases](https://github.com/devbattery/windows-mouse-gesture/releases)의 zip을 받고, `Get-FileHash`가 `SHA256SUMS.txt`와 같음
-- [ ] 압축 해제 → `install.cmd` → UAC 1회로 설치가 끝나고 Glide가 트레이에 나타남(이미 설치된 PC는 덮어 설치, 이전 인증서는 자동 정리)
-- [ ] 스마트 앱 컨트롤이 켜진 PC(있으면): 설치가 UAC 전에 안내와 함께 멈추고, 인증서·설치 폴더·자동 시작이 생기지 않음
+- [ ] 다른 PC에서 [Releases](https://github.com/devbattery/windows-mouse-gesture/releases)의 `GlideSetup-<버전>.exe`를 받고, `Get-FileHash`가 `SHA256SUMS.txt`와 같음
+- [ ] 설치 프로그램 실행 → UAC 1회 → 마지막 화면 **Glide 시작**으로 Glide가 트레이에 나타남(이미 설치된 PC는 덮어 설치, 이전 인증서는 자동 정리)
+- [ ] 0.5.x를 `install.cmd`로 설치했던 PC: 설치된 앱 목록에 Glide for Windows가 한 줄만 있고, `certlm.msc` 신뢰 루트의 "Glide Local UIAccess Signing"이 1개, 다시 로그인하면 Glide가 한 번만 시작됨
+- [ ] 스마트 앱 컨트롤이 켜진 PC(있으면): 설치가 안내와 함께 멈추고, 인증서·설치 폴더·자동 시작이 생기지 않음
 - [ ] 트레이 상태 줄 "관리자 권한 창: 지원", 설정 창 상태 칸 "관리자 권한 창 지원: 켜짐"
 - [ ] 시작 메뉴 "Glide 설정"으로 설정 창을 열 때 SmartScreen 경고가 뜨지 않음
 - [ ] `C:\Program Files\Glide\glide-core.exe` 속성 → 자세히에 "Glide for Windows"와 버전이 보임
@@ -248,7 +268,7 @@ node tools/make-icon.cjs                                      # settings/icons/i
 - [ ] 설정 창 **Glide 정보**: 버전이 맞고, "새 버전 확인"은 브라우저로 Releases를, "라이선스"·"오픈소스 고지"는 메모장으로 파일을 엶
 - [ ] 새 버전 알림(0.5.4 이후 버전이 나왔을 때): Glide 시작 2분쯤 뒤 트레이 알림이 한 번 뜨고, 알림·트레이 메뉴 "새 버전 받기"가
       Release 페이지를 엶. 설정 창 정보 칸에 "새 버전 x.y.z가 있습니다"가 보임. "새 버전 자동 확인"을 끄고 저장하면 다시 묻지 않음
-- [ ] (선택) 소스에서 빌드: `git clone` → `tools\package.ps1` → `install.cmd`
+- [ ] (선택) 소스에서 빌드: `git clone` → `tools\package.ps1` → `tools\build-installer.ps1` → `dist\GlideSetup-<버전>.exe`
 
 **1. 우클릭 호환(M1 게이트)**
 - [ ] 단순 우클릭의 컨텍스트 메뉴가 정상: 탐색기, 바탕화면, 메모장, VS Code, Office, 브라우저
@@ -283,7 +303,7 @@ node tools/make-icon.cjs                                      # settings/icons/i
 - [ ] 제스처를 20회 이상 쓴 뒤 **길게 누르기 기준 추천**을 확인하고, 다르면 적용
 
 **5. 제거**
-- [ ] 설정 → 앱 → 설치된 앱 → Glide for Windows → 제거: UAC 1회 뒤 창에 "제거했습니다"가 보이고 아무 키나 누르면 닫힘
+- [ ] 설정 → 앱 → 설치된 앱 → Glide for Windows → 제거: UAC 1회 뒤 제거 완료 창이 뜸(실행 중이던 Glide도 종료됨)
 - [ ] `C:\Program Files\Glide` 폴더와 설치된 앱 목록의 항목이 사라짐
 - [ ] 신뢰 루트(`certlm.msc`)에 "Glide Local UIAccess Signing" 인증서가 남지 않음, 트레이 아이콘·자동 시작·시작 메뉴 바로 가기도 없음
 - [ ] 다시 설치해 평소처럼 사용
@@ -299,7 +319,7 @@ node tools/make-icon.cjs                                      # settings/icons/i
 | 테두리 없는 창 모드 게임 | 전체 화면으로 알아차리지 못해 우클릭이 늦거나 제스처로 바뀜 | 게임을 켠 채 트레이 메뉴 **제스처를 쓰지 않을 앱**에서 게임 선택(또는 설정 창 **실행 중인 앱에서 고르기**) |
 | 오른쪽 드래그를 쓰는 앱(3D·지도·그림 도구 등) | 바로 드래그하면 제스처로 인식 | 잠시 누르고 있다가 드래그(길게 누르기)하거나 예외 앱에 추가 |
 | 자동 클릭 도구 | 원격 제어 입력을 켜면 그 도구의 우클릭도 제스처 판정을 거침 | 원격 제어 입력을 끄기 |
-| 관리자 권한 창 | 미지원판(`-NoUiAccess`)에서는 제스처가 없음 | 기본 설치(uiAccess)로 설치 |
+| 관리자 권한 창 | 미지원판(**관리자 권한 창에서도 제스처 사용**을 끄고 설치)에서는 제스처가 없음 | 그 항목을 켜고 다시 설치 |
 
 ## 구조
 
@@ -330,8 +350,8 @@ src/
     log.rs / demo.rs / clock.rs  진단 로그, --demo-overlay, 고해상도 시계
 build.rs        코어 버전 정보·아이콘 자원, uiaccess 기능일 때 uiAccess 매니페스트
 settings/       설정 창(Tauri 2): src/main.rs(명령), ui/(확장 설정 화면 기반 정적 파일)
-installer/      install.ps1 / uninstall.ps1 (+ .cmd)
-tools/          package.ps1(빌드·패키지), archive.ps1(zip·SHA256SUMS), about.hbs(라이선스 고지 템플릿), 픽스처·아이콘 생성 스크립트(Node)
+installer/      glide.iss(Inno Setup 7 설치 프로그램), glide-setup.ps1(인증서·프로세스 종료·이전 설치 정리 보조 스크립트)
+tools/          package.ps1(빌드·패키지), build-installer.ps1(설치 프로그램·SHA256SUMS), install-inno-setup.ps1·test-installer.ps1(CI 컴파일러 설치·설치 확인), about.hbs(라이선스 고지 템플릿), 픽스처·아이콘 생성 스크립트(Node)
 about.toml      라이선스 고지 설정(대상·허용 라이선스, cargo-about)
 assets/         아이콘 PNG(확장과 같은 그림)
 .github/        CI(검사·패키지), 릴리스(태그 → GitHub Release, SignPath 서명 준비), 문제 앱 보고 양식
@@ -357,7 +377,13 @@ docs/signing.md 코드 서명 현황과 SignPath 계획
 - 화면 잠금·UAC 확인 창 직전에 누른 우클릭은 실행 없이 취소됩니다(Glide가 판정 중이던 누름은 앱에 전달되지 않음).
 - 서명 전이라 다운로드·첫 실행 때 SmartScreen 경고가 뜰 수 있습니다([설치](#설치) 참고).
 - 서명 전이라 스마트 앱 컨트롤이 켜진 Windows 11에서는 실행되지 않습니다([스마트 앱 컨트롤](#스마트-앱-컨트롤)).
-  설치 방식이 배치 파일(`install.cmd`, 서명할 수 없음)이어서, 서명판이 나와도 설치 방법을 바꿔야 할 수 있습니다.
+  설치 프로그램(`GlideSetup-<버전>.exe`)도 아직 서명이 없습니다. 서명 계획은 [docs/signing.md](docs/signing.md)에 있습니다.
+- 자동 시작은 이 PC의 모든 사용자에게 적용됩니다(`HKLM\...\Run`). 한 사용자만 끄려면 설정 → 앱 → 시작 프로그램에서
+  끄는데, 모든 사용자 항목이라 관리자 권한이 필요할 수 있습니다. 모두 끄려면 설치 프로그램을 다시 실행해
+  **로그인할 때 자동으로 시작**을 끄고 설치합니다.
+- 설치 프로그램을 "관리자 권한으로 실행"으로 시작하면, 마지막 화면의 **Glide 시작**도 관리자 권한으로 Glide를 시작합니다.
+  보통처럼 더블클릭으로 실행해 주세요. 그렇게 시작했다면 트레이에서 종료한 뒤 `C:\Program Files\Glide\glide-core.exe`를
+  실행하거나 다시 로그인하면 됩니다(다음 로그인부터는 정상).
 
 ## 개인정보
 
