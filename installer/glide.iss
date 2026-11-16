@@ -144,6 +144,9 @@ Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 [UninstallDelete]
 ; 보조 스크립트가 설치 중에 만드는 파일
 Type: files; Name: "{app}\install.json"
+; 제거 프로그램은 설치 때 자기가 만든 폴더만 지운다. 0.5.x 스크립트 설치에서 넘어온 PC는 설치 폴더가 이미 있었으므로
+; 비어 있으면 지운다(이 항목은 제거의 마지막 단계에서 실행된다).
+Type: dirifempty; Name: "{app}"
 
 [Run]
 ; postinstall 항목은 원래 사용자(관리자 권한이 아닌) 권한으로 실행된다. 그래야 일반 권한 + uiAccess로 시작된다.

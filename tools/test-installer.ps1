@@ -191,6 +191,13 @@ function Invoke-UninstallAndAssert([string] $Name) {
     while (((Test-Path -LiteralPath $InstallDir) -or (Test-Path -LiteralPath $UninstallKey)) -and (Get-Date) -lt $deadline) {
         Start-Sleep -Milliseconds 500
     }
+    # 정리가 덜 됐으면 원인을 바로 볼 수 있게 남은 파일과 제거 기록을 보여 준다.
+    if (Test-Path -LiteralPath $InstallDir) {
+        Write-Host '  남은 파일:'
+        Get-ChildItem -LiteralPath $InstallDir -Force -Recurse | ForEach-Object { Write-Host "    $($_.FullName)" }
+        Get-Process -Name 'unins*', '_iu*' -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  실행 중: $($_.ProcessName)" }
+        if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log | Write-Host }
+    }
     Assert-That (-not (Test-Path -LiteralPath $InstallDir)) '설치 폴더 삭제'
     Assert-That (-not (Test-Path -LiteralPath $UninstallKey)) '앱 및 기능 등록 제거'
     Assert-That ((Get-GlideRootCertificates).Count -eq 0) '신뢰 루트의 Glide 인증서 제거'
