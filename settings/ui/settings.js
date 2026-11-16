@@ -310,6 +310,8 @@ function exclusionChip(name, note) {
 }
 
 let suggestedExclusions = [];
+// 코어가 알려 준 기본 제스처("기본값으로 되돌리기"용). 받기 전에는 null.
+let defaultRules = null;
 function renderSuggested() {
   const list = $("#suggested");
   list.replaceChildren(...suggestedExclusions.map(({ name, reason }) => exclusionChip(name, reason)));
@@ -784,7 +786,8 @@ $("#apply-hold").addEventListener("click", () => {
   checkupStatus(`길게 누르기를 ${(value / 1000).toFixed(2)}초로 바꿨습니다. 변경사항 저장을 눌러 적용하세요.`);
 });
 $("#reset").addEventListener("click", () => {
-  settings.rules = structuredClone(GestureKit.defaults.rules);
+  // Windows판 기본 제스처는 코어(Settings::default)가 정한다. 확장 사본(shared.js)의 기본값과 다르다.
+  settings.rules = structuredClone(defaultRules ?? GestureKit.defaults.rules);
   render();
   dirty();
   status("기본 제스처를 불러왔습니다. 저장하면 적용됩니다.");
@@ -873,6 +876,7 @@ async function load() {
   const data = await invoke("load");
   applyCatalog(data.catalog);
   suggestedExclusions = data.suggestedExclusions ?? [];
+  defaultRules = data.defaults?.rules ?? null;
   settings = data.settings;
   settingsFingerprint = data.core?.status?.settingsFingerprint;
   externalChangeWarned = false;
