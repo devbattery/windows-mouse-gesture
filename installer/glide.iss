@@ -168,6 +168,8 @@ const
 var
   // 마지막으로 실행한 보조 스크립트의 출력(사용자 안내에 넣는다)
   HelperOutput: String;
+  // 0.5.x 스크립트 설치의 선택을 이미 적용했는지(한 번만 적용한다)
+  LegacyChoicesApplied: Boolean;
 
 // ── 명령줄 ──
 
@@ -288,11 +290,16 @@ end;
 // 0.5.x 스크립트 설치에서 처음 넘어올 때는 그때 고른 설정(-NoUiAccess, -NoAutoStart)을 기본값으로 이어받는다.
 // 예: 자체 서명 uiAccess가 거부되는 PC에서 -NoUiAccess로 설치했다면, 다시 켜면 Glide가 시작되지 않는다.
 // 이 설치 프로그램의 기록이 있으면 UsePreviousTasks가 지난 선택을 쓰고, 명령줄로 작업을 정했으면 그대로 둔다.
-procedure InitializeWizard;
+// 작업 목록은 InitializeWizard 뒤에 다시 만들어지므로(CI에서 확인), 화면 설치는 작업 선택 화면이 처음 보일 때,
+// 조용한 설치는 화면 처리가 모두 끝난 PrepareToInstall에서 적용한다.
+procedure ApplyLegacyChoices;
 var
   Info: AnsiString;
   Text: String;
 begin
+  if LegacyChoicesApplied then
+    Exit;
+  LegacyChoicesApplied := True;
   if not RegKeyExists(HKLM, LegacyUninstallKey) or RegKeyExists(HKLM, InnoUninstallKey) then
     Exit;
   if HasParamWithValue('TASKS') or HasParamWithValue('MERGETASKS') then
@@ -316,12 +323,20 @@ begin
   end;
 end;
 
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if (CurPageID = wpSelectTasks) and not WizardSilent then
+    ApplyLegacyChoices;
+end;
+
 // 파일을 바꾸기 전에 설치 폴더에서 실행 중인 Glide를 종료한다. 다른 위치에서 실행 중이면 준비 화면에서 멈춘다.
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   Code: Integer;
 begin
   Result := '';
+  // 조용한 설치에는 작업 선택 화면이 보이지 않으므로 여기서 적용한다(화면 설치는 이미 적용돼 아무것도 하지 않는다).
+  ApplyLegacyChoices;
   try
     ExtractTemporaryFile(HelperName);
     // 서명에 실패했을 때 쓸 파일. 설치 중이 아니라 지금 꺼내 두어, 꺼내지 못하는 문제를 설치 전에 알게 한다.

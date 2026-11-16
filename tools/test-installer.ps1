@@ -60,8 +60,17 @@ $UserShortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'Glide 설�
 $LogDir = Join-Path $root 'dist\installer-test-logs'
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
+# 마지막으로 실행한 설치·제거 프로그램의 기록. 확인이 실패하면 원인을 볼 수 있게 함께 보여 준다.
+$script:LastLog = $null
+
 function Assert-That([bool] $Condition, [string] $Text) {
-    if (-not $Condition) { throw "실패: $Text" }
+    if (-not $Condition) {
+        if ($script:LastLog -and (Test-Path -LiteralPath $script:LastLog)) {
+            Write-Host "---- $script:LastLog"
+            Get-Content -LiteralPath $script:LastLog | Write-Host
+        }
+        throw "실패: $Text"
+    }
     Write-Host "  확인: $Text"
 }
 
@@ -79,6 +88,7 @@ function Read-Info { Get-Content -Raw -LiteralPath $InfoPath | ConvertFrom-Json 
 function Invoke-Setup([string] $Name, [string[]] $Extra) {
     Write-Host "== $Name"
     $log = Join-Path $LogDir "$Name.log"
+    $script:LastLog = $log
     $arguments = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/NOLAUNCH', "/LOG=`"$log`"") + $Extra
     $process = Start-Process -FilePath $Setup -ArgumentList $arguments -Wait -PassThru
     if ($process.ExitCode -ne 0) {
@@ -184,6 +194,7 @@ function Invoke-UninstallAndAssert([string] $Name) {
     $uninstaller = Join-Path $InstallDir 'unins000.exe'
     Assert-That (Test-Path -LiteralPath $uninstaller) '제거 프로그램(unins000.exe)'
     $log = Join-Path $LogDir "$Name.log"
+    $script:LastLog = $log
     $process = Start-Process -FilePath $uninstaller -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/LOG=`"$log`"" -Wait -PassThru
     Assert-That ($process.ExitCode -eq 0) "제거 프로그램 종료 코드 0($($process.ExitCode))"
     # 제거 프로그램은 임시 폴더의 사본으로 다시 실행되므로, 정리가 끝날 때까지 기다린다.
