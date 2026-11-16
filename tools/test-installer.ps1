@@ -109,10 +109,10 @@ function New-LegacyInstall([bool] $UiAccess, [bool] $AutoStart) {
     New-Item -Path $LegacyUninstallKey -Force | Out-Null
     New-ItemProperty -Path $LegacyUninstallKey -Name 'DisplayName' -Value 'Glide for Windows' -PropertyType String -Force | Out-Null
     if ($AutoStart) { Set-ItemProperty -Path $UserRunKey -Name 'Glide' -Value "`"$Core`"" }
-    $shell = New-Object -ComObject WScript.Shell
-    $link = $shell.CreateShortcut($UserShortcut)
-    $link.TargetPath = Join-Path $InstallDir 'glide-settings.exe'
-    $link.Save()
+    # 지워지는지만 보면 되므로 빈 파일로 만든다. WScript.Shell은 시스템 ANSI 코드 페이지에 없는 글자(영어 러너의 한글)가
+    # 들어간 바로 가기를 저장하지 못한다.
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $UserShortcut) | Out-Null
+    [IO.File]::WriteAllBytes($UserShortcut, [byte[]]@())
     return $thumbprint
 }
 
